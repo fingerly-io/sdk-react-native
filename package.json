@@ -1,0 +1,19 @@
+{
+  "name": "@badele/react-native",
+  "version": "0.0.0",
+  "private": true,
+  "description": "React Native SDK (JS/TS bridge to native modules)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "dependencies": {
+    "@badele/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "react-native": ">=0.73"
+  },
+  "scripts": {
+    "build": "true",
+    "lint": "true",
+    "test": "true"
+  }
+}
