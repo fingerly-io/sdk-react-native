@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // No rootDir/outDir: tsup builds this package, and `tsc` is only ever run
+    // as a typechecker (`noEmit`).
+    "noEmit": true,
+    // No DOM. This package runs in React Native's JavaScript runtime, which has
+    // no `document` and no `window` — compiling against the DOM lib would let a
+    // browser API through the typechecker and fail at runtime on a phone.
+    "lib": ["ES2020"]
+  },
+  "include": ["src", "tests"]
+}
