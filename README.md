@@ -139,6 +139,27 @@ Both are your configuration rather than the user's behaviour, and neither is
 worth retrying. The native SDK retries the ones that are (429 and 5xx) with
 full-jitter backoff before it ever rejects.
 
+## Status
+
+Both platforms are implemented. `ios/BadeleModule.swift` calls
+[`mobile/ios`](../ios) and `android/…/BadeleModule.kt` calls
+[`mobile/android`](../android); each is a few dozen lines of forwarding to that
+SDK's `BadeleBridge`, with no logic of its own by design.
+
+Neither has been compiled here — a React Native module needs `React-Core` and
+`com.facebook.react:react-android` on the compile path, and no host app is
+installed on the machine this was written on. What they call is compiled and
+tested by each native SDK's own suite.
+
+The Android module depends on `io.badele:badele:0.1.0`, which is not published
+yet. Until it is, build the SDK's AAR into your local Maven repository:
+
+```
+cd ../android && ./gradlew :badele:publishToMavenLocal
+```
+
+and add `mavenLocal()` to the host app's repositories.
+
 ## Development
 
 ```
