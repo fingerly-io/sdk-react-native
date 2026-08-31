@@ -22,6 +22,18 @@ function installNative() {
   const identify = vi.fn(async () =>
     JSON.stringify({
       requestId: 'req_123',
+      visitorId: 'vis_7Kq3',
+      visitorIsNew: false,
+      visitorConfidence: 93,
+      identifiable: true,
+      duplicate: false,
+      state: 'scored',
+      reason: '',
+      suspectScore: 41,
+      suspectLevel: 'medium',
+      triggers: [
+        { signal: 'patched-natives', group: 'automation', weight: 22, confidence: 'high', reason: '' },
+      ],
       verdicts: { jailbreak: { value: false, confidence: 'low', reasons: [] } },
       report: { schema: 1, sources: {} },
     }),
@@ -115,6 +127,61 @@ describe('identify', () => {
     expect(result.requestId).toBe('req_123')
     expect(result.verdicts.jailbreak.value).toBe(false)
     expect(result.report.schema).toBe(1)
+  })
+
+  it('carries the server\'s verdict across the bridge', async () => {
+    // The bridge is a JSON string, so every field the native SDKs added has to
+    // survive a round trip through it. A field the native side sends and this
+    // side drops is invisible until an app reads undefined in production.
+    installNative()
+    const badele = await load({ apiKey: 'pk_test' })
+    const result = await badele.identify()
+
+    expect(result.visitorId).toBe('vis_7Kq3')
+    expect(result.visitorIsNew).toBe(false)
+    expect(result.visitorConfidence).toBe(93)
+    expect(result.identifiable).toBe(true)
+    expect(result.duplicate).toBe(false)
+    expect(result.state).toBe('scored')
+    expect(result.suspectScore).toBe(41)
+    expect(result.suspectLevel).toBe('medium')
+    expect(result.triggers).toHaveLength(1)
+    expect(result.triggers[0]?.signal).toBe('patched-natives')
+  })
+
+  it('keeps an unscored answer null rather than zero', async () => {
+    // Both native bridges send an explicit JSON null for suspectScore when
+    // nothing scored the submission. Null and 0 are different answers - 0 is
+    // "scored, nothing fired" - and collapsing them here would report a clean
+    // visitor for a check that never happened.
+    const configure = vi.fn()
+    const identify = vi.fn(async () =>
+      JSON.stringify({
+        requestId: '',
+        visitorId: '',
+        visitorIsNew: false,
+        visitorConfidence: 0,
+        identifiable: false,
+        duplicate: false,
+        state: '',
+        reason: 'not-submitted',
+        suspectScore: null,
+        suspectLevel: null,
+        triggers: [],
+        verdicts: {},
+        report: { schema: 1, sources: {} },
+      }),
+    )
+    const collect = vi.fn(async () => JSON.stringify({ schema: 1, sources: {} }))
+    NativeModules.Badele = { configure, identify, collect, sdkVersion: '0.1.0' }
+
+    const badele = await load({ apiKey: 'pk_test' })
+    const result = await badele.identify({ submit: false })
+
+    expect(result.suspectScore).toBeNull()
+    expect(result.suspectLevel).toBeNull()
+    expect(result.triggers).toEqual([])
+    expect(result.visitorId).toBe('')
   })
 
   it('fills in the verdicts this platform cannot answer', async () => {

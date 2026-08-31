@@ -97,8 +97,10 @@ export interface IdentifyOptions {
   /**
    * Collect and score without sending anything.
    *
-   * `requestId` comes back empty, which is the honest answer: nothing was
-   * submitted, so there is nothing to fetch later.
+   * Everything the server decides comes back empty: no `requestId`, no
+   * `visitorId`, and `suspectScore` is `null` rather than `0`. Nothing was
+   * submitted, so nobody scored it, and a `0` would read as "scored, found
+   * nothing".
    */
   submit?: boolean
 }
@@ -158,10 +160,13 @@ export class BadeleClient {
   /**
    * Collect, score locally, and submit.
    *
-   * Returns as soon as the server has a receipt. It does not wait for the
-   * enriched event — IP geolocation and the velocity windows take far longer
-   * than a screen should block for — so this answers with a `requestId` that
-   * the finished event is fetched by.
+   * Returns the server's verdict, not a receipt for one. There is no second
+   * call to make: the address lookup and the scoring happen on the request, so
+   * `suspectScore` and `visitorId` are populated by the time this resolves.
+   *
+   * `suspectScore` is `null` rather than `0` when nothing scored the
+   * submission. The two are different answers — `0` means "scored, nothing
+   * fired" — and the native bridges send an explicit null to keep them apart.
    */
   async identify(options: IdentifyOptions = {}): Promise<NativeIdentifyResult> {
     const native = nativeModule()
@@ -217,6 +222,7 @@ export function nativeVersion(): string | undefined {
 export type {
   AndroidVerdicts,
   Confidence,
+  IdentifyTrigger,
   IntegrityReport,
   IosVerdicts,
   Lie,

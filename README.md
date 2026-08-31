@@ -16,7 +16,7 @@ Requires React Native **0.73** or newer. Autolinking handles the rest.
 import { load } from '@badele/react-native'
 
 const badele = await load({ apiKey: 'pk_live_…' })
-const { requestId, verdicts } = await badele.identify({ tag: 'checkout' })
+const { requestId, visitorId, suspectScore, verdicts } = await badele.identify({ tag: 'checkout' })
 
 if (verdicts.jailbreak.value && verdicts.jailbreak.confidence === 'high') {
   // step up to a challenge, hold for review, add friction
@@ -28,11 +28,13 @@ shipped bundle — it is scoped to the app identifiers you list. A **secret** ke
 is refused when it arrives from a client, so pasting one in does not work by
 design.
 
-`identify()` collects, scores on the device, and submits. It resolves as soon as
-the server has a receipt — IP geolocation and the velocity windows are computed
-after the response — so what comes back is a `requestId` rather than a finished
-event. Send it to your own backend with the request it belongs to, and let your
-backend fetch the finished event and decide.
+`identify()` collects, scores on the device, and submits. It resolves with the
+server's verdict — `visitorId`, `suspectScore`, `suspectLevel` and the triggers
+behind them — so there is no second call to make. Send the `requestId` and
+`visitorId` to your own backend with the request they belong to, and let your
+backend decide: **the score in your hand came from a device you do not
+control**, and an app that branches on it locally is an app whose branch can be
+patched out.
 
 Pass `{ submit: false }` to collect and score without sending anything.
 
