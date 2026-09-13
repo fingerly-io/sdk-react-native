@@ -7,7 +7,11 @@
     // No DOM. This package runs in React Native's JavaScript runtime, which has
     // no `document` and no `window` — compiling against the DOM lib would let a
     // browser API through the typechecker and fail at runtime on a phone.
-    "lib": ["ES2020"]
+    "lib": ["ES2020"],
+    "baseUrl": ".",
+    "paths": {
+      "react-native": ["./tests/stub-react-native.ts"]
+    }
   },
   "include": ["src", "tests"]
 }
