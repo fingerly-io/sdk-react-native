@@ -41,11 +41,15 @@ android {
     }
 }
 
-repositories {
-    google()
-    mavenCentral()
-    // The host app's own repositories are added by React Native's autolinking,
-    // which is how a customer building against a locally published SDK gets it.
+rootProject.allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        // Used by contributors until io.badele:badele is published. Maven
+        // Central remains ahead of it, so released applications resolve the
+        // published artifact once it exists.
+        mavenLocal()
+    }
 }
 
 dependencies {

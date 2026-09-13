@@ -80,7 +80,8 @@ function nativeModule(): BadeleNativeModule | undefined {
  */
 const MISSING_NATIVE_MODULE =
   '@badele/react-native could not find its native module. ' +
-  'Run `pod install` in ios/ and rebuild the app — this package cannot ' +
+  'Run `pod install` in ios/ when building for iOS, then rebuild the native ' +
+  'app — this package cannot ' +
   'collect anything without it, and collecting a subset from JavaScript would ' +
   'report a compromised device as clean.'
 
@@ -103,6 +104,55 @@ export interface IdentifyOptions {
    * nothing".
    */
   submit?: boolean
+}
+
+/** A native or transport failure surfaced consistently on both platforms. */
+export class BadeleError extends Error {
+  override readonly name = 'BadeleError'
+
+  constructor(
+    message: string,
+    /** The HTTP status when the failure came from a server response. */
+    readonly status?: number,
+  ) {
+    super(message)
+  }
+}
+
+function badeleError(error: unknown): BadeleError {
+  if (error instanceof BadeleError) return error
+
+  const record =
+    typeof error === 'object' && error !== null
+      ? (error as Record<string, unknown>)
+      : undefined
+  const code = record?.code
+  const parsedStatus =
+    typeof code === 'number'
+      ? code
+      : typeof code === 'string' && code.trim() !== ''
+        ? Number(code)
+        : undefined
+  const status =
+    typeof parsedStatus === 'number' && Number.isInteger(parsedStatus) && parsedStatus > 0
+      ? parsedStatus
+      : undefined
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof record?.message === 'string'
+        ? record.message
+        : String(error)
+
+  return new BadeleError(message, status)
+}
+
+async function invokeNative(operation: () => Promise<string>): Promise<string> {
+  try {
+    return await operation()
+  } catch (error) {
+    throw badeleError(error)
+  }
 }
 
 /**
@@ -170,9 +220,11 @@ export class BadeleClient {
    */
   async identify(options: IdentifyOptions = {}): Promise<NativeIdentifyResult> {
     const native = nativeModule()
-    if (!native) throw new Error(MISSING_NATIVE_MODULE)
+    if (!native) throw new BadeleError(MISSING_NATIVE_MODULE)
 
-    const raw = await native.identify(options.tag ?? null, options.submit !== false)
+    const raw = await invokeNative(() =>
+      native.identify(options.tag ?? null, options.submit !== false),
+    )
     const parsed = JSON.parse(raw) as NativeIdentifyResult
 
     return { ...parsed, verdicts: normalizeVerdicts(parsed.verdicts) }
@@ -186,9 +238,9 @@ export class BadeleClient {
    */
   async collect(): Promise<SignalReport> {
     const native = nativeModule()
-    if (!native) throw new Error(MISSING_NATIVE_MODULE)
+    if (!native) throw new BadeleError(MISSING_NATIVE_MODULE)
 
-    const raw = await native.collect()
+    const raw = await invokeNative(() => native.collect())
     return JSON.parse(raw) as SignalReport
   }
 }
@@ -204,9 +256,13 @@ export class BadeleClient {
  */
 export async function load(options: BadeleOptions): Promise<BadeleClient> {
   const native = nativeModule()
-  if (!native) throw new Error(MISSING_NATIVE_MODULE)
+  if (!native) throw new BadeleError(MISSING_NATIVE_MODULE)
 
-  native.configure(options.apiKey, options.endpoint ?? '', platformName())
+  try {
+    native.configure(options.apiKey, options.endpoint ?? '', platformName())
+  } catch (error) {
+    throw badeleError(error)
+  }
   return new BadeleClient()
 }
 

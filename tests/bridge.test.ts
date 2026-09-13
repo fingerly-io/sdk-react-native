@@ -211,6 +211,48 @@ describe('identify', () => {
   })
 })
 
+describe('native failures', () => {
+  it('preserves an HTTP status without exposing platform-specific error shapes', async () => {
+    const nativeError = Object.assign(new Error('organisation disabled'), { code: '402' })
+    NativeModules.Badele = {
+      configure: vi.fn(),
+      identify: vi.fn(async () => {
+        throw nativeError
+      }),
+      collect: vi.fn(async () => JSON.stringify({ schema: 1, sources: {} })),
+      sdkVersion: '0.1.0',
+    }
+
+    const badele = await load({ apiKey: 'pk_test' })
+
+    await expect(badele.identify()).rejects.toMatchObject({
+      name: 'BadeleError',
+      message: 'organisation disabled',
+      status: 402,
+    })
+  })
+
+  it('does not mistake a native sentinel code for an HTTP status', async () => {
+    const nativeError = Object.assign(new Error('no report'), { code: '-1' })
+    NativeModules.Badele = {
+      configure: vi.fn(),
+      identify: vi.fn(async () => JSON.stringify({})),
+      collect: vi.fn(async () => {
+        throw nativeError
+      }),
+      sdkVersion: '0.1.0',
+    }
+
+    const badele = await load({ apiKey: 'pk_test' })
+
+    await expect(badele.collect()).rejects.toMatchObject({
+      name: 'BadeleError',
+      message: 'no report',
+      status: undefined,
+    })
+  })
+})
+
 describe('the endpoint', () => {
   it('passes an empty string when unset, so the native default applies', async () => {
     const { configure } = installNative()

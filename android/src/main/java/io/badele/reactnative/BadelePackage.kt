@@ -1,9 +1,10 @@
 package io.badele.reactnative
 
-import com.facebook.react.ReactPackage
+import com.facebook.react.BaseReactPackage
 import com.facebook.react.bridge.NativeModule
 import com.facebook.react.bridge.ReactApplicationContext
-import com.facebook.react.uimanager.ViewManager
+import com.facebook.react.module.model.ReactModuleInfo
+import com.facebook.react.module.model.ReactModuleInfoProvider
 
 /**
  * What React Native's autolinking registers.
@@ -12,12 +13,27 @@ import com.facebook.react.uimanager.ViewManager
  * rather than ours: iOS discovers a module from the `RCT_EXTERN_MODULE` macro
  * in `BadeleModule.m`, and Android needs a package class naming it.
  */
-class BadelePackage : ReactPackage {
+class BadelePackage : BaseReactPackage() {
 
-    override fun createNativeModules(context: ReactApplicationContext): List<NativeModule> =
-        listOf(BadeleModule(context))
+    override fun getModule(name: String, reactContext: ReactApplicationContext): NativeModule? =
+        if (name == MODULE_NAME) BadeleModule(reactContext) else null
 
-    /** No views. This SDK draws nothing. */
-    override fun createViewManagers(context: ReactApplicationContext): List<ViewManager<*, *>> =
-        emptyList()
+    @Suppress("DEPRECATION")
+    override fun getReactModuleInfoProvider(): ReactModuleInfoProvider = ReactModuleInfoProvider {
+        mapOf(
+            MODULE_NAME to ReactModuleInfo(
+                MODULE_NAME,
+                BadeleModule::class.java.name,
+                false, // canOverrideExistingModule
+                false, // needsEagerInit
+                true, // hasConstants; retained for React Native 0.73 compatibility
+                false, // isCxxModule
+                false, // isTurboModule
+            ),
+        )
+    }
+
+    private companion object {
+        const val MODULE_NAME = "Badele"
+    }
 }
