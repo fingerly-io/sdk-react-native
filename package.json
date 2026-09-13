@@ -2,6 +2,7 @@
   "name": "@badele/react-native",
   "version": "0.0.0",
   "private": true,
+  "packageManager": "pnpm@9.0.0",
   "description": "React Native SDK — a bridge to the native iOS and Android SDKs, which do the collecting",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -17,7 +18,7 @@
   "files": ["dist", "ios", "android", "badele-react-native.podspec"],
   "sideEffects": false,
   "dependencies": {
-    "@badele/core": "workspace:*"
+    "@badele/types": "workspace:*"
   },
   "peerDependencies": {
     "react-native": ">=0.73"

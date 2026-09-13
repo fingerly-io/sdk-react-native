@@ -54,8 +54,8 @@ nothing, because a customer would believe it.
 
 This package calls the native SDK and hands back what it produced. The detection
 logic lives in one place per platform, in Swift and in Kotlin, and improving it
-improves React Native, Flutter and native apps at the same time rather than
-three times over.
+improves React Native, Flutter, Lynx and native apps at the same time rather
+than four times over.
 
 If the native module is missing, `load()` throws and says so. It does not
 degrade to a JavaScript-only mode, for the reason above.
@@ -159,10 +159,12 @@ full-jitter backoff before it ever rejects.
 ## Status
 
 Both platforms are implemented, compiled, and exercised through a React Native
-0.87 New Architecture host. `ios/BadeleModule.swift` calls
-[`mobile/ios`](../ios) and `android/…/BadeleModule.kt` calls
-[`mobile/android`](../android); each is a few dozen lines of forwarding to that
-SDK's `BadeleBridge`, with no logic of its own by design.
+0.87 New Architecture host. `ios/BadeleModule.swift` calls the
+[iOS SDK](https://github.com/badele-io/sdk-ios) and
+`android/…/BadeleModule.kt` calls the
+[Android SDK](https://github.com/badele-io/sdk-android); each is a few dozen
+lines of forwarding to that SDK's `BadeleBridge`, with no logic of its own by
+design.
 
 The iOS bridge builds through CocoaPods and ran on an iPhone 16e simulator: all
 21 sources completed in 163ms cold and 105ms warm, with 59ms and 3ms of bridge
@@ -200,3 +202,7 @@ The 19 contract tests run against a stub for `react-native` rather than the real
 package — pulling the React Native tree in to unit-test a thirty-line bridge
 would be a hundred megabytes of install for nothing. See
 `tests/stub-react-native.ts`.
+
+Clone this repository with `--recurse-submodules`, or run
+`git submodule update --init --recursive`, so the shared `@badele/types`
+contract is available to the standalone workspace.

@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.turbo/
+android/.gradle/
+android/build/
+ios/Pods/

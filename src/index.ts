@@ -33,12 +33,14 @@
 import { NativeModules, Platform } from 'react-native'
 
 import type {
+  MobileBadeleOptions,
+  MobileIdentifyOptions,
   MobileVerdicts,
   NativeIdentifyResult,
   SdkPlatform,
   SignalReport,
   Verdict,
-} from '@badele/core'
+} from '@badele/types'
 
 /**
  * The native module, as the bridge exposes it.
@@ -85,26 +87,8 @@ const MISSING_NATIVE_MODULE =
   'collect anything without it, and collecting a subset from JavaScript would ' +
   'report a compromised device as clean.'
 
-export interface BadeleOptions {
-  /** The SDK key, from the dashboard. */
-  apiKey: string
-  /** Origin of the API. Defaults to production. */
-  endpoint?: string
-}
-
-export interface IdentifyOptions {
-  /** Echoed back on the finished event, for the caller's own correlation. */
-  tag?: string
-  /**
-   * Collect and score without sending anything.
-   *
-   * Everything the server decides comes back empty: no `requestId`, no
-   * `visitorId`, and `suspectScore` is `null` rather than `0`. Nothing was
-   * submitted, so nobody scored it, and a `0` would read as "scored, found
-   * nothing".
-   */
-  submit?: boolean
-}
+export type BadeleOptions = MobileBadeleOptions
+export type IdentifyOptions = MobileIdentifyOptions
 
 /** A native or transport failure surfaced consistently on both platforms. */
 export class BadeleError extends Error {
@@ -290,4 +274,4 @@ export type {
   SignalReport,
   SignalStatus,
   Verdict,
-} from '@badele/core'
+} from '@badele/types'
