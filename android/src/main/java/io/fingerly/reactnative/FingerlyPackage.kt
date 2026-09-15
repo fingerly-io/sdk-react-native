@@ -1,4 +1,4 @@
-package io.badele.reactnative
+package io.fingerly.reactnative
 
 import com.facebook.react.BaseReactPackage
 import com.facebook.react.bridge.NativeModule
@@ -11,19 +11,19 @@ import com.facebook.react.module.model.ReactModuleInfoProvider
  *
  * There is no iOS equivalent of this file, and that asymmetry is the platforms'
  * rather than ours: iOS discovers a module from the `RCT_EXTERN_MODULE` macro
- * in `BadeleModule.m`, and Android needs a package class naming it.
+ * in `FingerlyModule.m`, and Android needs a package class naming it.
  */
-class BadelePackage : BaseReactPackage() {
+class FingerlyPackage : BaseReactPackage() {
 
     override fun getModule(name: String, reactContext: ReactApplicationContext): NativeModule? =
-        if (name == MODULE_NAME) BadeleModule(reactContext) else null
+        if (name == MODULE_NAME) FingerlyModule(reactContext) else null
 
     @Suppress("DEPRECATION")
     override fun getReactModuleInfoProvider(): ReactModuleInfoProvider = ReactModuleInfoProvider {
         mapOf(
             MODULE_NAME to ReactModuleInfo(
                 MODULE_NAME,
-                BadeleModule::class.java.name,
+                FingerlyModule::class.java.name,
                 false, // canOverrideExistingModule
                 false, // needsEagerInit
                 true, // hasConstants; retained for React Native 0.73 compatibility
@@ -34,6 +34,6 @@ class BadelePackage : BaseReactPackage() {
     }
 
     private companion object {
-        const val MODULE_NAME = "Badele"
+        const val MODULE_NAME = "Fingerly"
     }
 }

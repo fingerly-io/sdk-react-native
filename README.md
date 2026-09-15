@@ -1,10 +1,10 @@
-# @badele/react-native
+# @fingerly/react-native
 
-React Native bindings for Badele. A bridge to the native iOS and Android SDKs,
+React Native bindings for Fingerly. A bridge to the native iOS and Android SDKs,
 which do the collecting.
 
 ```
-pnpm add @badele/react-native
+pnpm add @fingerly/react-native
 cd ios && pod install
 ```
 
@@ -13,10 +13,10 @@ Requires React Native **0.73** or newer. Autolinking handles the rest.
 ## Identify
 
 ```ts
-import { load } from '@badele/react-native'
+import { load } from '@fingerly/react-native'
 
-const badele = await load({ apiKey: 'pk_live_…' })
-const { requestId, visitorId, suspectScore, verdicts } = await badele.identify({ tag: 'checkout' })
+const fingerly = await load({ apiKey: 'pk_live_…' })
+const { requestId, visitorId, suspectScore, verdicts } = await fingerly.identify({ tag: 'checkout' })
 
 if (verdicts.jailbreak.value && verdicts.jailbreak.confidence === 'high') {
   // step up to a challenge, hold for review, add friction
@@ -116,7 +116,7 @@ pins it for that reason.
 ## Reading the report
 
 ```ts
-const report = await badele.collect()   // no submission
+const report = await fingerly.collect()   // no submission
 
 for (const [id, outcome] of Object.entries(report.sources)) {
   console.log(id, outcome.status, `${outcome.ms}ms`, outcome.reason ?? '')
@@ -130,17 +130,17 @@ something made it.
 
 ## Errors
 
-`identify()` rejects with a `BadeleError`. Its `message` is the server's and its
+`identify()` rejects with a `FingerlyError`. Its `message` is the server's and its
 `status` is the HTTP status when there was one, so callers do not have to depend
 on React Native's platform-specific native error shape:
 
 ```ts
-import { BadeleError } from '@badele/react-native'
+import { FingerlyError } from '@fingerly/react-native'
 
 try {
-  await badele.identify()
+  await fingerly.identify()
 } catch (error) {
-  if (error instanceof BadeleError && error.status === 401) {
+  if (error instanceof FingerlyError && error.status === 401) {
     // The SDK key or application restriction is wrong.
   }
 }
@@ -159,11 +159,11 @@ full-jitter backoff before it ever rejects.
 ## Status
 
 Both platforms are implemented, compiled, and exercised through a React Native
-0.87 New Architecture host. `ios/BadeleModule.swift` calls the
-[iOS SDK](https://github.com/badele-io/sdk-ios) and
-`android/…/BadeleModule.kt` calls the
-[Android SDK](https://github.com/badele-io/sdk-android); each is a few dozen
-lines of forwarding to that SDK's `BadeleBridge`, with no logic of its own by
+0.87 New Architecture host. `ios/FingerlyModule.swift` calls the
+[iOS SDK](https://github.com/fingerly-io/sdk-ios) and
+`android/…/FingerlyModule.kt` calls the
+[Android SDK](https://github.com/fingerly-io/sdk-android); each is a few dozen
+lines of forwarding to that SDK's `FingerlyBridge`, with no logic of its own by
 design.
 
 The iOS bridge builds through CocoaPods and ran on an iPhone 16e simulator: all
@@ -177,14 +177,14 @@ The native SDKs are not published yet. For an iOS development build, point the
 host application's Podfile at the sibling checkout:
 
 ```ruby
-pod 'Badele', :path => '/path/to/sdks/mobile/ios'
+pod 'Fingerly', :path => '/path/to/sdks/mobile/ios'
 ```
 
-The Android module depends on `io.badele:badele:0.1.0`, which is not published
+The Android module depends on `io.fingerly:fingerly:0.1.0`, which is not published
 yet. Until it is, build the SDK's AAR into your local Maven repository:
 
 ```
-cd ../android && ./gradlew :badele:publishToMavenLocal
+cd ../android && ./gradlew :fingerly:publishToMavenLocal
 ```
 
 The bridge checks Maven Central first and Maven Local second, so the host app
@@ -204,5 +204,5 @@ would be a hundred megabytes of install for nothing. See
 `tests/stub-react-native.ts`.
 
 Clone this repository with `--recurse-submodules`, or run
-`git submodule update --init --recursive`, so the shared `@badele/types`
+`git submodule update --init --recursive`, so the shared `@fingerly/types`
 contract is available to the standalone workspace.

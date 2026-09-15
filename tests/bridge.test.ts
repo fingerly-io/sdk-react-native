@@ -40,12 +40,12 @@ function installNative() {
   )
   const collect = vi.fn(async () => JSON.stringify({ schema: 1, sources: {} }))
 
-  NativeModules.Badele = { configure, identify, collect, sdkVersion: '0.1.0' }
+  NativeModules.Fingerly = { configure, identify, collect, sdkVersion: '0.1.0' }
   return { configure, identify, collect }
 }
 
 beforeEach(() => {
-  delete NativeModules.Badele
+  delete NativeModules.Fingerly
   Platform.OS = 'ios'
 })
 
@@ -97,32 +97,32 @@ describe('when the native module is missing', () => {
 describe('identify', () => {
   it('passes the tag through and defaults to submitting', async () => {
     const { identify } = installNative()
-    const badele = await load({ apiKey: 'pk_test' })
-    await badele.identify({ tag: 'checkout' })
+    const fingerly = await load({ apiKey: 'pk_test' })
+    await fingerly.identify({ tag: 'checkout' })
 
     expect(identify).toHaveBeenCalledWith('checkout', true)
   })
 
   it('sends a null tag rather than undefined, which the bridge cannot carry', async () => {
     const { identify } = installNative()
-    const badele = await load({ apiKey: 'pk_test' })
-    await badele.identify()
+    const fingerly = await load({ apiKey: 'pk_test' })
+    await fingerly.identify()
 
     expect(identify).toHaveBeenCalledWith(null, true)
   })
 
   it('honours submit: false', async () => {
     const { identify } = installNative()
-    const badele = await load({ apiKey: 'pk_test' })
-    await badele.identify({ submit: false })
+    const fingerly = await load({ apiKey: 'pk_test' })
+    await fingerly.identify({ submit: false })
 
     expect(identify).toHaveBeenCalledWith(null, false)
   })
 
   it('parses the native result rather than handing back a string', async () => {
     installNative()
-    const badele = await load({ apiKey: 'pk_test' })
-    const result = await badele.identify()
+    const fingerly = await load({ apiKey: 'pk_test' })
+    const result = await fingerly.identify()
 
     expect(result.requestId).toBe('req_123')
     expect(result.verdicts.jailbreak.value).toBe(false)
@@ -134,8 +134,8 @@ describe('identify', () => {
     // survive a round trip through it. A field the native side sends and this
     // side drops is invisible until an app reads undefined in production.
     installNative()
-    const badele = await load({ apiKey: 'pk_test' })
-    const result = await badele.identify()
+    const fingerly = await load({ apiKey: 'pk_test' })
+    const result = await fingerly.identify()
 
     expect(result.visitorId).toBe('vis_7Kq3')
     expect(result.visitorIsNew).toBe(false)
@@ -173,10 +173,10 @@ describe('identify', () => {
       }),
     )
     const collect = vi.fn(async () => JSON.stringify({ schema: 1, sources: {} }))
-    NativeModules.Badele = { configure, identify, collect, sdkVersion: '0.1.0' }
+    NativeModules.Fingerly = { configure, identify, collect, sdkVersion: '0.1.0' }
 
-    const badele = await load({ apiKey: 'pk_test' })
-    const result = await badele.identify({ submit: false })
+    const fingerly = await load({ apiKey: 'pk_test' })
+    const result = await fingerly.identify({ submit: false })
 
     expect(result.suspectScore).toBeNull()
     expect(result.suspectLevel).toBeNull()
@@ -190,8 +190,8 @@ describe('identify', () => {
     // to give a well-defined answer rather than throwing on undefined — which
     // would typecheck cleanly and fail at runtime, the worst combination.
     installNative()
-    const badele = await load({ apiKey: 'pk_test' })
-    const result = await badele.identify()
+    const fingerly = await load({ apiKey: 'pk_test' })
+    const result = await fingerly.identify()
 
     expect(result.verdicts.root.value).toBe(false)
     expect(result.verdicts.emulator.value).toBe(false)
@@ -204,8 +204,8 @@ describe('identify', () => {
     // in the codebase returns when its inputs are missing. A caller that needs
     // to tell that from "we looked and found nothing" reads the length.
     installNative()
-    const badele = await load({ apiKey: 'pk_test' })
-    const result = await badele.identify()
+    const fingerly = await load({ apiKey: 'pk_test' })
+    const result = await fingerly.identify()
 
     expect(result.verdicts.root.reasons).toEqual([])
   })
@@ -214,7 +214,7 @@ describe('identify', () => {
 describe('native failures', () => {
   it('preserves an HTTP status without exposing platform-specific error shapes', async () => {
     const nativeError = Object.assign(new Error('organisation disabled'), { code: '402' })
-    NativeModules.Badele = {
+    NativeModules.Fingerly = {
       configure: vi.fn(),
       identify: vi.fn(async () => {
         throw nativeError
@@ -223,10 +223,10 @@ describe('native failures', () => {
       sdkVersion: '0.1.0',
     }
 
-    const badele = await load({ apiKey: 'pk_test' })
+    const fingerly = await load({ apiKey: 'pk_test' })
 
-    await expect(badele.identify()).rejects.toMatchObject({
-      name: 'BadeleError',
+    await expect(fingerly.identify()).rejects.toMatchObject({
+      name: 'FingerlyError',
       message: 'organisation disabled',
       status: 402,
     })
@@ -234,7 +234,7 @@ describe('native failures', () => {
 
   it('does not mistake a native sentinel code for an HTTP status', async () => {
     const nativeError = Object.assign(new Error('no report'), { code: '-1' })
-    NativeModules.Badele = {
+    NativeModules.Fingerly = {
       configure: vi.fn(),
       identify: vi.fn(async () => JSON.stringify({})),
       collect: vi.fn(async () => {
@@ -243,10 +243,10 @@ describe('native failures', () => {
       sdkVersion: '0.1.0',
     }
 
-    const badele = await load({ apiKey: 'pk_test' })
+    const fingerly = await load({ apiKey: 'pk_test' })
 
-    await expect(badele.collect()).rejects.toMatchObject({
-      name: 'BadeleError',
+    await expect(fingerly.collect()).rejects.toMatchObject({
+      name: 'FingerlyError',
       message: 'no report',
       status: undefined,
     })

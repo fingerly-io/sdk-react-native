@@ -1,5 +1,5 @@
 /**
- * @badele/react-native — the React Native SDK.
+ * @fingerly/react-native — the React Native SDK.
  *
  * # This package collects nothing
  *
@@ -19,10 +19,10 @@
  * Flutter and native apps at the same time rather than three times over.
  *
  * ```ts
- * import { load } from '@badele/react-native'
+ * import { load } from '@fingerly/react-native'
  *
- * const badele = await load({ apiKey: 'pk_live_…' })
- * const { requestId, verdicts } = await badele.identify({ tag: 'checkout' })
+ * const fingerly = await load({ apiKey: 'pk_live_…' })
+ * const { requestId, verdicts } = await fingerly.identify({ tag: 'checkout' })
  *
  * if (verdicts.jailbreak.value && verdicts.jailbreak.confidence === 'high') {
  *   // step up to a challenge
@@ -33,14 +33,14 @@
 import { NativeModules, Platform } from 'react-native'
 
 import type {
-  MobileBadeleOptions,
+  MobileFingerlyOptions,
   MobileIdentifyOptions,
   MobileVerdicts,
   NativeIdentifyResult,
   SdkPlatform,
   SignalReport,
   Verdict,
-} from '@badele/types'
+} from '@fingerly/types'
 
 /**
  * The native module, as the bridge exposes it.
@@ -51,7 +51,7 @@ import type {
  * another mapping to keep in step with the wire format — and the wire format is
  * already JSON.
  */
-interface BadeleNativeModule {
+interface FingerlyNativeModule {
   configure(apiKey: string, endpoint: string, platform: string): void
   identify(tag: string | null, submit: boolean): Promise<string>
   collect(): Promise<string>
@@ -67,8 +67,8 @@ interface BadeleNativeModule {
  * lifetime of the app and report "run pod install" to somebody who had. One
  * property lookup per identification is not a cost worth that failure mode.
  */
-function nativeModule(): BadeleNativeModule | undefined {
-  return NativeModules.Badele as BadeleNativeModule | undefined
+function nativeModule(): FingerlyNativeModule | undefined {
+  return NativeModules.Fingerly as FingerlyNativeModule | undefined
 }
 
 /**
@@ -81,18 +81,18 @@ function nativeModule(): BadeleNativeModule | undefined {
  * handles the rest.
  */
 const MISSING_NATIVE_MODULE =
-  '@badele/react-native could not find its native module. ' +
+  '@fingerly/react-native could not find its native module. ' +
   'Run `pod install` in ios/ when building for iOS, then rebuild the native ' +
   'app — this package cannot ' +
   'collect anything without it, and collecting a subset from JavaScript would ' +
   'report a compromised device as clean.'
 
-export type BadeleOptions = MobileBadeleOptions
+export type FingerlyOptions = MobileFingerlyOptions
 export type IdentifyOptions = MobileIdentifyOptions
 
 /** A native or transport failure surfaced consistently on both platforms. */
-export class BadeleError extends Error {
-  override readonly name = 'BadeleError'
+export class FingerlyError extends Error {
+  override readonly name = 'FingerlyError'
 
   constructor(
     message: string,
@@ -103,8 +103,8 @@ export class BadeleError extends Error {
   }
 }
 
-function badeleError(error: unknown): BadeleError {
-  if (error instanceof BadeleError) return error
+function fingerlyError(error: unknown): FingerlyError {
+  if (error instanceof FingerlyError) return error
 
   const record =
     typeof error === 'object' && error !== null
@@ -128,14 +128,14 @@ function badeleError(error: unknown): BadeleError {
         ? record.message
         : String(error)
 
-  return new BadeleError(message, status)
+  return new FingerlyError(message, status)
 }
 
 async function invokeNative(operation: () => Promise<string>): Promise<string> {
   try {
     return await operation()
   } catch (error) {
-    throw badeleError(error)
+    throw fingerlyError(error)
   }
 }
 
@@ -190,7 +190,7 @@ function normalizeVerdicts(raw: Partial<MobileVerdicts> | undefined): MobileVerd
   }
 }
 
-export class BadeleClient {
+export class FingerlyClient {
   /**
    * Collect, score locally, and submit.
    *
@@ -204,7 +204,7 @@ export class BadeleClient {
    */
   async identify(options: IdentifyOptions = {}): Promise<NativeIdentifyResult> {
     const native = nativeModule()
-    if (!native) throw new BadeleError(MISSING_NATIVE_MODULE)
+    if (!native) throw new FingerlyError(MISSING_NATIVE_MODULE)
 
     const raw = await invokeNative(() =>
       native.identify(options.tag ?? null, options.submit !== false),
@@ -222,7 +222,7 @@ export class BadeleClient {
    */
   async collect(): Promise<SignalReport> {
     const native = nativeModule()
-    if (!native) throw new BadeleError(MISSING_NATIVE_MODULE)
+    if (!native) throw new FingerlyError(MISSING_NATIVE_MODULE)
 
     const raw = await invokeNative(() => native.collect())
     return JSON.parse(raw) as SignalReport
@@ -233,21 +233,21 @@ export class BadeleClient {
  * A configured client.
  *
  * Async, and it returns a promise even though the native `configure` is
- * synchronous. That is deliberate and matches every other Badele SDK: the shape
+ * synchronous. That is deliberate and matches every other Fingerly SDK: the shape
  * callers write today is the shape that still works when this needs to await
  * something, and changing `load` from sync to async later would break every
  * integration at once.
  */
-export async function load(options: BadeleOptions): Promise<BadeleClient> {
+export async function load(options: FingerlyOptions): Promise<FingerlyClient> {
   const native = nativeModule()
-  if (!native) throw new BadeleError(MISSING_NATIVE_MODULE)
+  if (!native) throw new FingerlyError(MISSING_NATIVE_MODULE)
 
   try {
     native.configure(options.apiKey, options.endpoint ?? '', platformName())
   } catch (error) {
-    throw badeleError(error)
+    throw fingerlyError(error)
   }
-  return new BadeleClient()
+  return new FingerlyClient()
 }
 
 /** The native SDK's version, which is the one that did the collecting. */
@@ -255,7 +255,7 @@ export function nativeVersion(): string | undefined {
   return nativeModule()?.sdkVersion
 }
 
-// Re-exported so an app that only installs @badele/react-native can name the
+// Re-exported so an app that only installs @fingerly/react-native can name the
 // types it receives without also depending on the kernel directly. They are the
 // same types the browser SDK returns, from the same package — which is the
 // point of the report envelope being shared.
@@ -274,4 +274,4 @@ export type {
   SignalReport,
   SignalStatus,
   Verdict,
-} from '@badele/types'
+} from '@fingerly/types'

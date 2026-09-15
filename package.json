@@ -1,5 +1,5 @@
 {
-  "name": "@badele/react-native",
+  "name": "@fingerly/react-native",
   "version": "0.0.0",
   "private": true,
   "packageManager": "pnpm@9.0.0",
@@ -15,10 +15,10 @@
       "require": "./dist/index.cjs"
     }
   },
-  "files": ["dist", "ios", "android", "badele-react-native.podspec"],
+  "files": ["dist", "ios", "android", "fingerly-react-native.podspec"],
   "sideEffects": false,
   "dependencies": {
-    "@badele/types": "workspace:*"
+    "@fingerly/types": "workspace:*"
   },
   "peerDependencies": {
     "react-native": ">=0.73"

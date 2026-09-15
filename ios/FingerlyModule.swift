@@ -2,7 +2,7 @@
 ///
 /// It does three things: hand the configuration to the native SDK, call it, and
 /// return the JSON it produced. There is deliberately no logic here at all —
-/// every decision about what to collect and how to weigh it lives in `Badele`,
+/// every decision about what to collect and how to weigh it lives in `Fingerly`,
 /// where the Android module's Kotlin equivalent has its own copy of the same
 /// arrangement. A bridge that made judgements would be a fourth place to keep a
 /// rule in step.
@@ -15,12 +15,12 @@
 /// thread to be constructed — which keeps a fingerprint off the thread that
 /// draws the customer's UI.
 
-import Badele
+import Fingerly
 import Foundation
 import React
 
-@objc(Badele)
-final class BadeleModule: NSObject {
+@objc(Fingerly)
+final class FingerlyModule: NSObject {
     /// React Native asks this before it constructs the module.
     ///
     /// `false` because nothing in this module touches UIKit at construction
@@ -37,12 +37,12 @@ final class BadeleModule: NSObject {
     /// removes us.
     @objc
     func constantsToExport() -> [AnyHashable: Any] {
-        ["sdkVersion": BadeleBridge.sdkVersion]
+        ["sdkVersion": FingerlyBridge.sdkVersion]
     }
 
     @objc(configure:endpoint:platform:)
     func configure(apiKey: String, endpoint: String, platform: String) {
-        BadeleBridge.configure(apiKey: apiKey, endpoint: endpoint, platform: platform)
+        FingerlyBridge.configure(apiKey: apiKey, endpoint: endpoint, platform: platform)
     }
 
     @objc(identify:submit:resolver:rejecter:)
@@ -52,7 +52,7 @@ final class BadeleModule: NSObject {
         resolve: @escaping RCTPromiseResolveBlock,
         reject: @escaping RCTPromiseRejectBlock
     ) {
-        BadeleBridge.identify(tag: tag, submit: submit.boolValue) { json, error in
+        FingerlyBridge.identify(tag: tag, submit: submit.boolValue) { json, error in
             Self.settle(json, error, resolve, reject)
         }
     }
@@ -62,7 +62,7 @@ final class BadeleModule: NSObject {
         resolve: @escaping RCTPromiseResolveBlock,
         reject: @escaping RCTPromiseRejectBlock
     ) {
-        BadeleBridge.collect { json, error in
+        FingerlyBridge.collect { json, error in
             Self.settle(json, error, resolve, reject)
         }
     }

@@ -11,13 +11,13 @@ require 'json'
 package = JSON.parse(File.read(File.join(__dir__, 'package.json')))
 
 Pod::Spec.new do |s|
-  s.name         = 'badele-react-native'
+  s.name         = 'fingerly-react-native'
   s.version      = package['version']
   s.summary      = package['description']
   s.license      = 'Apache-2.0'
-  s.author       = { 'Badele' => 'support@badele.io' }
-  s.homepage     = 'https://badele.io'
-  s.source       = { :git => 'https://github.com/badele-io/sdk-react-native.git', :tag => s.version.to_s }
+  s.author       = { 'Fingerly' => 'support@fingerly.io' }
+  s.homepage     = 'https://fingerly.io'
+  s.source       = { :git => 'https://github.com/fingerly-io/sdk-react-native.git', :tag => s.version.to_s }
 
   # 13.0 matches the native SDK's floor. Raising it here would exclude apps the
   # SDK itself supports, and lowering it would promise a platform the code does
@@ -29,5 +29,5 @@ Pod::Spec.new do |s|
 
   s.dependency 'React-Core'
   # The SDK. Everything this package does is call into it.
-  s.dependency 'Badele'
+  s.dependency 'Fingerly'
 end

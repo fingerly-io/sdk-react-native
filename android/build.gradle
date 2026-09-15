@@ -21,7 +21,7 @@ apply plugin: 'com.android.library'
 apply plugin: 'org.jetbrains.kotlin.android'
 
 android {
-    namespace 'io.badele.reactnative'
+    namespace 'io.fingerly.reactnative'
     compileSdk 36
 
     defaultConfig {
@@ -45,7 +45,7 @@ rootProject.allprojects {
     repositories {
         google()
         mavenCentral()
-        // Used by contributors until io.badele:badele is published. Maven
+        // Used by contributors until io.fingerly:fingerly is published. Maven
         // Central remains ahead of it, so released applications resolve the
         // published artifact once it exists.
         mavenLocal()
@@ -64,8 +64,8 @@ dependencies {
     //
     //     includeBuild('../../mobile/android') {
     //         dependencySubstitution {
-    //             substitute module('io.badele:badele') using project(':badele')
+    //             substitute module('io.fingerly:fingerly') using project(':fingerly')
     //         }
     //     }
-    implementation 'io.badele:badele:0.1.0'
+    implementation 'io.fingerly:fingerly:0.1.0'
 }

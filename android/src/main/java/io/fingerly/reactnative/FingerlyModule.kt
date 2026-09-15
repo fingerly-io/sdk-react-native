@@ -1,11 +1,11 @@
-package io.badele.reactnative
+package io.fingerly.reactnative
 
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
-import io.badele.sdk.bridge.BadeleBridge
-import io.badele.sdk.bridge.BridgeCallback
+import io.fingerly.sdk.bridge.FingerlyBridge
+import io.fingerly.sdk.bridge.BridgeCallback
 
 /**
  * The React Native module.
@@ -25,16 +25,16 @@ import io.badele.sdk.bridge.BridgeCallback
  * scope immediately — so a fingerprint never touches the thread that draws the
  * customer's UI.
  */
-class BadeleModule(context: ReactApplicationContext) : ReactContextBaseJavaModule(context) {
+class FingerlyModule(context: ReactApplicationContext) : ReactContextBaseJavaModule(context) {
 
     /**
      * The name JavaScript looks the module up by.
      *
-     * `NativeModules.Badele`, matching the iOS module exactly. The two have to
+     * `NativeModules.Fingerly`, matching the iOS module exactly. The two have to
      * agree: `src/index.ts` looks up one name and would report "run pod
      * install" on whichever platform disagreed.
      */
-    override fun getName(): String = "Badele"
+    override fun getName(): String = "Fingerly"
 
     /**
      * Values available synchronously to JavaScript.
@@ -44,24 +44,24 @@ class BadeleModule(context: ReactApplicationContext) : ReactContextBaseJavaModul
      * app that is slow to launch because of us is an app that removes us.
      */
     override fun getConstants(): Map<String, Any> =
-        mapOf("sdkVersion" to BadeleBridge.sdkVersion())
+        mapOf("sdkVersion" to FingerlyBridge.sdkVersion())
 
     @ReactMethod
     fun configure(apiKey: String, endpoint: String, platform: String) {
         // The React context rather than the Activity. An SDK holding an
         // Activity would keep a destroyed screen alive for as long as the
         // client lives, and this one is deliberately long-lived.
-        BadeleBridge.configure(reactApplicationContext, apiKey, endpoint, platform)
+        FingerlyBridge.configure(reactApplicationContext, apiKey, endpoint, platform)
     }
 
     @ReactMethod
     fun identify(tag: String?, submit: Boolean, promise: Promise) {
-        BadeleBridge.identify(tag, submit, settle(promise))
+        FingerlyBridge.identify(tag, submit, settle(promise))
     }
 
     @ReactMethod
     fun collect(promise: Promise) {
-        BadeleBridge.collect(settle(promise))
+        FingerlyBridge.collect(settle(promise))
     }
 
     /**

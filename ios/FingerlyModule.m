@@ -8,14 +8,14 @@
 //  this file: it is a declaration of what the Swift alongside it implements,
 //  and it contains no logic for the same reason the Swift contains none.
 //
-//  The signatures have to match `BadeleModule.swift` exactly, including the
+//  The signatures have to match `FingerlyModule.swift` exactly, including the
 //  selector fragments. A mismatch is not a compile error in either language;
 //  it is a method JavaScript calls that never arrives.
 //
 
 #import <React/RCTBridgeModule.h>
 
-@interface RCT_EXTERN_MODULE (Badele, NSObject)
+@interface RCT_EXTERN_MODULE (Fingerly, NSObject)
 
 RCT_EXTERN_METHOD(configure:(NSString *)apiKey
                   endpoint:(NSString *)endpoint
