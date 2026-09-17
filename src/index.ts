@@ -21,7 +21,7 @@
  * ```ts
  * import { load } from '@fingerly/react-native'
  *
- * const fingerly = await load({ apiKey: 'pk_live_…' })
+ * const fingerly = await load({ apiKey: 'fly_pk_us_production_…' })
  * const { requestId, verdicts } = await fingerly.identify({ tag: 'checkout' })
  *
  * if (verdicts.jailbreak.value && verdicts.jailbreak.confidence === 'high') {
@@ -52,7 +52,8 @@ import type {
  * already JSON.
  */
 interface FingerlyNativeModule {
-  configure(apiKey: string, endpoint: string, platform: string): void
+  configure(apiKey: string, endpoint: string, platform: string, consent: ConsentState): void
+  setConsent(state: ConsentState): void
   identify(tag: string | null, submit: boolean): Promise<string>
   collect(): Promise<string>
   readonly sdkVersion: string
@@ -87,12 +88,35 @@ const MISSING_NATIVE_MODULE =
   'collect anything without it, and collecting a subset from JavaScript would ' +
   'report a compromised device as clean.'
 
-export type FingerlyOptions = MobileFingerlyOptions
+/**
+ * Whether the user has agreed to be identified.
+ *
+ * The same three states, spelled the same way, as `@fingerly/core` and the
+ * native SDKs. Declared here rather than taken from `@fingerly/types` so this
+ * bridge builds against any copy of the shared types, including one that
+ * predates consent.
+ */
+export type ConsentState = 'granted' | 'pending' | 'denied'
+
+export interface FingerlyOptions extends MobileFingerlyOptions {
+  /**
+   * The consent to start from. `granted` when omitted, which is how every
+   * integration written before this option behaves.
+   *
+   * An app whose legal basis for identifying users is consent passes
+   * `pending` and calls [[FingerlyClient.setConsent]] once its consent tool
+   * has an answer. Until then `identify()` and `collect()` reject with a
+   * [[ConsentError]] and the native SDK runs no source and sends nothing.
+   */
+  consent?: ConsentState
+}
+
 export type IdentifyOptions = MobileIdentifyOptions
 
 /** A native or transport failure surfaced consistently on both platforms. */
 export class FingerlyError extends Error {
-  override readonly name = 'FingerlyError'
+  // Widened to `string` so a subclass can name itself.
+  override readonly name: string = 'FingerlyError'
 
   constructor(
     message: string,
@@ -103,6 +127,79 @@ export class FingerlyError extends Error {
   }
 }
 
+/**
+ * The call was refused because consent is not `granted`.
+ *
+ * Nothing was collected and nothing was sent: the native SDK refuses before
+ * its first source runs, and a call already in flight when consent is
+ * withdrawn refuses before it submits. `code` is the string every Fingerly SDK
+ * and bridge uses for this failure, so a handler shared with the browser SDK
+ * can branch on it without an `instanceof`.
+ *
+ * A `FingerlyError` as well, so a handler that already catches those keeps
+ * catching everything this package throws.
+ */
+export class ConsentError extends FingerlyError {
+  override readonly name: string = 'ConsentError'
+  readonly code = 'consent_required'
+
+  constructor(readonly state: ConsentState) {
+    super(`Fingerly needs consent before it can identify this visitor (consent is ${state})`)
+  }
+}
+
+const CONSENT_REQUIRED = 'consent_required'
+
+const CONSENT_STATES: readonly ConsentState[] = ['granted', 'pending', 'denied']
+
+function isConsentState(value: unknown): value is ConsentState {
+  return CONSENT_STATES.includes(value as ConsentState)
+}
+
+/**
+ * Refuse anything that is not one of the three states.
+ *
+ * Loud, as the browser SDK is. Consent tools hand over booleans, `'accepted'`
+ * and `'all'`, and the native SDKs would read any of those as `pending`: safe,
+ * but an app that stopped identifying anybody without saying why.
+ */
+function assertConsentState(state: unknown): asserts state is ConsentState {
+  if (!isConsentState(state)) {
+    throw new TypeError(
+      `Fingerly consent must be 'granted', 'pending' or 'denied' (received ${JSON.stringify(state)})`,
+    )
+  }
+}
+
+/**
+ * The state behind a native `consent_required` rejection.
+ *
+ * The iOS bridge carries it in `userInfo.state`. The Android bridge reports a
+ * code and a message only, and the message ends with the state in a fixed
+ * form. Anything unreadable is `pending`, which is what the native SDKs read
+ * an unknown state as.
+ */
+function refusedConsent(record: Record<string, unknown> | undefined, message: string): ConsentState {
+  const userInfo = record?.userInfo
+  const fromUserInfo =
+    typeof userInfo === 'object' && userInfo !== null
+      ? (userInfo as Record<string, unknown>).state
+      : undefined
+  if (isConsentState(fromUserInfo)) return fromUserInfo
+
+  const fromMessage = /\(consent is (\w+)\)/.exec(message)?.[1]
+  return isConsentState(fromMessage) ? fromMessage : 'pending'
+}
+
+/**
+ * The consent this package last handed to the native SDK.
+ *
+ * Module state rather than a field on the client, because the native bridge
+ * keeps one client per process: every `FingerlyClient` here talks to it, and a
+ * second `load` changes the state for all of them.
+ */
+let currentConsent: ConsentState = 'granted'
+
 function fingerlyError(error: unknown): FingerlyError {
   if (error instanceof FingerlyError) return error
 
@@ -111,6 +208,15 @@ function fingerlyError(error: unknown): FingerlyError {
       ? (error as Record<string, unknown>)
       : undefined
   const code = record?.code
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof record?.message === 'string'
+        ? record.message
+        : String(error)
+
+  if (code === CONSENT_REQUIRED) return new ConsentError(refusedConsent(record, message))
+
   const parsedStatus =
     typeof code === 'number'
       ? code
@@ -121,12 +227,6 @@ function fingerlyError(error: unknown): FingerlyError {
     typeof parsedStatus === 'number' && Number.isInteger(parsedStatus) && parsedStatus > 0
       ? parsedStatus
       : undefined
-  const message =
-    error instanceof Error
-      ? error.message
-      : typeof record?.message === 'string'
-        ? record.message
-        : String(error)
 
   return new FingerlyError(message, status)
 }
@@ -192,6 +292,37 @@ function normalizeVerdicts(raw: Partial<MobileVerdicts> | undefined): MobileVerd
 
 export class FingerlyClient {
   /**
+   * The consent last given to the native SDK, by [[load]] or [[setConsent]].
+   *
+   * Read-only; change it with [[setConsent]].
+   */
+  get consent(): ConsentState {
+    return currentConsent
+  }
+
+  /**
+   * Record the user's answer, as the consent tool reports it.
+   *
+   * Synchronous and safe to repeat. It applies to the next call and to any
+   * call already in flight: withdrawing consent stops a running `identify()`
+   * before it starts another source or submits, and that call rejects with a
+   * [[ConsentError]]. Throws a `TypeError` for anything that is not one of the
+   * three states rather than guessing what a consent tool meant.
+   */
+  setConsent(state: ConsentState): void {
+    assertConsentState(state)
+    const native = nativeModule()
+    if (!native) throw new FingerlyError(MISSING_NATIVE_MODULE)
+
+    try {
+      native.setConsent(state)
+    } catch (error) {
+      throw fingerlyError(error)
+    }
+    currentConsent = state
+  }
+
+  /**
    * Collect, score locally, and submit.
    *
    * Returns the server's verdict, not a receipt for one. There is no second
@@ -201,6 +332,8 @@ export class FingerlyClient {
    * `suspectScore` is `null` rather than `0` when nothing scored the
    * submission. The two are different answers — `0` means "scored, nothing
    * fired" — and the native bridges send an explicit null to keep them apart.
+   *
+   * Rejects with a [[ConsentError]] while consent is not `granted`.
    */
   async identify(options: IdentifyOptions = {}): Promise<NativeIdentifyResult> {
     const native = nativeModule()
@@ -218,7 +351,8 @@ export class FingerlyClient {
    * Run the sources and assemble the report, without submitting.
    *
    * Useful on its own: a debug screen, or a customer who wants to see exactly
-   * what would be sent before they agree to send it.
+   * what would be sent before they agree to send it. Collecting still needs
+   * consent, and rejects with a [[ConsentError]] without it.
    */
   async collect(): Promise<SignalReport> {
     const native = nativeModule()
@@ -237,16 +371,24 @@ export class FingerlyClient {
  * callers write today is the shape that still works when this needs to await
  * something, and changing `load` from sync to async later would break every
  * integration at once.
+ *
+ * Loading collects and sends nothing, whatever the consent, so it is safe to
+ * call at launch before the user has been asked. The consent passed here, or
+ * `granted` when there is none, replaces whatever the native SDK held before.
  */
 export async function load(options: FingerlyOptions): Promise<FingerlyClient> {
+  const consent = options.consent ?? 'granted'
+  assertConsentState(consent)
+
   const native = nativeModule()
   if (!native) throw new FingerlyError(MISSING_NATIVE_MODULE)
 
   try {
-    native.configure(options.apiKey, options.endpoint ?? '', platformName())
+    native.configure(options.apiKey, options.endpoint ?? '', platformName(), consent)
   } catch (error) {
     throw fingerlyError(error)
   }
+  currentConsent = consent
   return new FingerlyClient()
 }
 

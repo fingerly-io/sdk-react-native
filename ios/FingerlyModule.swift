@@ -40,9 +40,18 @@ final class FingerlyModule: NSObject {
         ["sdkVersion": FingerlyBridge.sdkVersion]
     }
 
-    @objc(configure:endpoint:platform:)
-    func configure(apiKey: String, endpoint: String, platform: String) {
-        FingerlyBridge.configure(apiKey: apiKey, endpoint: endpoint, platform: platform)
+    /// `consent` is always sent by `src/index.ts`, `granted` when the app
+    /// passed none. The native bridge reads anything it does not recognise as
+    /// `pending`.
+    @objc(configure:endpoint:platform:consent:)
+    func configure(apiKey: String, endpoint: String, platform: String, consent: String) {
+        FingerlyBridge.configure(apiKey: apiKey, endpoint: endpoint, platform: platform, consent: consent)
+    }
+
+    /// Applies to the configured client and to any call it has in flight.
+    @objc(setConsent:)
+    func setConsent(state: String) {
+        FingerlyBridge.setConsent(state)
     }
 
     @objc(identify:submit:resolver:rejecter:)
@@ -74,6 +83,11 @@ final class FingerlyModule: NSObject {
     /// organisation is not accepting traffic) without parsing a message. Both
     /// are the customer's configuration rather than the user's behaviour, and
     /// an app that retries either is an app that drains a battery over a typo.
+    ///
+    /// A refusal for want of consent carries its own string code in
+    /// `userInfo["code"]` (`consent_required`), which takes precedence over the
+    /// numeric one. The error itself is passed along, so its `userInfo.state`
+    /// reaches JavaScript too.
     private static func settle(
         _ json: String?,
         _ error: NSError?,
@@ -81,7 +95,8 @@ final class FingerlyModule: NSObject {
         _ reject: @escaping RCTPromiseRejectBlock
     ) {
         if let error {
-            reject("\(error.code)", error.localizedDescription, error)
+            let code = error.userInfo["code"] as? String ?? "\(error.code)"
+            reject(code, error.localizedDescription, error)
             return
         }
         guard let json else {

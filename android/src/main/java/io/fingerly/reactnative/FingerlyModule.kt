@@ -47,11 +47,20 @@ class FingerlyModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
         mapOf("sdkVersion" to FingerlyBridge.sdkVersion())
 
     @ReactMethod
-    fun configure(apiKey: String, endpoint: String, platform: String) {
+    fun configure(apiKey: String, endpoint: String, platform: String, consent: String) {
         // The React context rather than the Activity. An SDK holding an
         // Activity would keep a destroyed screen alive for as long as the
         // client lives, and this one is deliberately long-lived.
-        FingerlyBridge.configure(reactApplicationContext, apiKey, endpoint, platform)
+        //
+        // `consent` is always sent by `src/index.ts`, `granted` when the app
+        // passed none, so the state is set rather than left as it was.
+        FingerlyBridge.configure(reactApplicationContext, apiKey, endpoint, platform, consent)
+    }
+
+    /** Applies to the configured client and to any call it has in flight. */
+    @ReactMethod
+    fun setConsent(state: String) {
+        FingerlyBridge.setConsent(state)
     }
 
     @ReactMethod
@@ -71,7 +80,9 @@ class FingerlyModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
      * so a caller can branch on 401 (the key is wrong) or 402 (the organisation
      * is not accepting traffic) without parsing a message. Both are the
      * customer's configuration rather than the user's behaviour, and an app
-     * that retries either is an app that drains a battery over a typo.
+     * that retries either is an app that drains a battery over a typo. A call
+     * refused for want of consent arrives as `consent_required`, which
+     * `src/index.ts` turns into a `ConsentError`.
      */
     private fun settle(promise: Promise): BridgeCallback = object : BridgeCallback {
         override fun onSuccess(json: String) {

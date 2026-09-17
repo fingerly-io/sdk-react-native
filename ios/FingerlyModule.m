@@ -19,7 +19,10 @@
 
 RCT_EXTERN_METHOD(configure:(NSString *)apiKey
                   endpoint:(NSString *)endpoint
-                  platform:(NSString *)platform)
+                  platform:(NSString *)platform
+                  consent:(NSString *)consent)
+
+RCT_EXTERN_METHOD(setConsent:(NSString *)state)
 
 RCT_EXTERN_METHOD(identify:(NSString *_Nullable)tag
                   submit:(nonnull NSNumber *)submit

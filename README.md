@@ -15,7 +15,7 @@ Requires React Native **0.73** or newer. Autolinking handles the rest.
 ```ts
 import { load } from '@fingerly/react-native'
 
-const fingerly = await load({ apiKey: 'pk_live_…' })
+const fingerly = await load({ apiKey: 'fly_pk_us_production_…' })
 const { requestId, visitorId, suspectScore, verdicts } = await fingerly.identify({ tag: 'checkout' })
 
 if (verdicts.jailbreak.value && verdicts.jailbreak.confidence === 'high') {
@@ -37,6 +37,58 @@ control**, and an app that branches on it locally is an app whose branch can be
 patched out.
 
 Pass `{ submit: false }` to collect and score without sending anything.
+
+## Consent
+
+If your legal basis for identifying users is consent (ePrivacy, GDPR), load the
+SDK with `consent: 'pending'` and pass on the answer from your consent tool
+when it arrives:
+
+```ts
+import { ConsentError, load } from '@fingerly/react-native'
+
+const fingerly = await load({ apiKey: 'fly_pk_us_production_…', consent: 'pending' })
+
+// From your consent tool's callback:
+fingerly.setConsent(accepted ? 'granted' : 'denied')
+
+fingerly.consent   // 'granted', 'pending' or 'denied'
+```
+
+| Option / method | What it does |
+| --- | --- |
+| `consent` option on `load` | The starting state: `'granted'` (the default), `'pending'` or `'denied'`. |
+| `setConsent(state)` | Records the decision. Synchronous and safe to call repeatedly. |
+| `consent` | The state last given to the native SDK, read-only. |
+
+The default is `'granted'`, so an integration that never mentions consent
+behaves exactly as before. Anything other than the three states throws a
+`TypeError` rather than being guessed at.
+
+While the state is anything else, the native SDK runs no source, reads and
+writes no keychain entry or preference for fingerprinting, and sends nothing.
+`identify()` and `collect()` reject with a `ConsentError`, whose `code` is
+`'consent_required'` and whose `state` says which state refused the call:
+
+```ts
+try {
+  await fingerly.identify()
+} catch (error) {
+  if (error instanceof ConsentError) {
+    // error.state is 'pending' or 'denied'; nothing was collected or sent
+  }
+}
+```
+
+A change applies to calls already in flight as well as later ones. Consent
+withdrawn halfway through an `identify()` stops it before the next source
+starts and before anything is submitted, and that call rejects with
+`ConsentError`.
+
+Loading collects and sends nothing, whatever the state, so calling `load` at
+launch before the user has been asked is safe. The native SDK holds one state
+for the whole app: each `load` sets it to the `consent` passed, or `'granted'`
+when there is none, so pass `consent` on every `load`.
 
 ## This package collects nothing
 
@@ -156,6 +208,10 @@ Both are your configuration rather than the user's behaviour, and neither is
 worth retrying. The native SDK retries the ones that are (429 and 5xx) with
 full-jitter backoff before it ever rejects.
 
+A call refused for want of consent rejects with `ConsentError`, a subclass of
+`FingerlyError` with `code: 'consent_required'`, a `state`, and no `status`.
+Answer it with `setConsent`, not a retry. See [Consent](#consent).
+
 ## Status
 
 Both platforms are implemented, compiled, and exercised through a React Native
@@ -198,7 +254,7 @@ pnpm test
 pnpm lint
 ```
 
-The 19 contract tests run against a stub for `react-native` rather than the real
+The 30 contract tests run against a stub for `react-native` rather than the real
 package — pulling the React Native tree in to unit-test a thirty-line bridge
 would be a hundred megabytes of install for nothing. See
 `tests/stub-react-native.ts`.
