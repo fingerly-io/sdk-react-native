@@ -21,7 +21,7 @@
  * ```ts
  * import { load } from '@fingerly/react-native'
  *
- * const fingerly = await load({ apiKey: 'fly_pk_us_production_…' })
+ * const fingerly = await load({ apiKey: 'fly_pk_production_…' })
  * const { requestId, verdicts } = await fingerly.identify({ tag: 'checkout' })
  *
  * if (verdicts.jailbreak.value && verdicts.jailbreak.confidence === 'high') {

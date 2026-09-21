@@ -94,24 +94,24 @@ beforeEach(() => {
 describe('the platform name', () => {
   it('names the host as well as the toolkit on iOS', async () => {
     const { configure } = installNative()
-    await load({ apiKey: 'fly_pk_us_development_test' })
+    await load({ apiKey: 'fly_pk_development_test' })
 
-    expect(configure).toHaveBeenCalledWith('fly_pk_us_development_test', '', 'react-native-ios', 'granted')
+    expect(configure).toHaveBeenCalledWith('fly_pk_development_test', '', 'react-native-ios', 'granted')
   })
 
   it('names the host as well as the toolkit on Android', async () => {
     Platform.OS = 'android'
     const { configure } = installNative()
-    await load({ apiKey: 'fly_pk_us_development_test' })
+    await load({ apiKey: 'fly_pk_development_test' })
 
-    expect(configure).toHaveBeenCalledWith('fly_pk_us_development_test', '', 'react-native-android', 'granted')
+    expect(configure).toHaveBeenCalledWith('fly_pk_development_test', '', 'react-native-android', 'granted')
   })
 
   it('never reports the bare toolkit, which the server scores as a browser', async () => {
     for (const os of ['ios', 'android'] as const) {
       Platform.OS = os
       const { configure } = installNative()
-      await load({ apiKey: 'fly_pk_us_development_test' })
+      await load({ apiKey: 'fly_pk_development_test' })
 
       const platform = configure.mock.calls[0]?.[2] as string
       // `models.RiskPlatformFor` matches "android" first, then "ios", and falls
@@ -124,7 +124,7 @@ describe('the platform name', () => {
 
 describe('when the native module is missing', () => {
   it('says what to do about it rather than throwing on undefined', async () => {
-    await expect(load({ apiKey: 'fly_pk_us_development_test' })).rejects.toThrow(/pod install/)
+    await expect(load({ apiKey: 'fly_pk_development_test' })).rejects.toThrow(/pod install/)
   })
 
   it('explains why a JavaScript-only fallback is not offered', async () => {
@@ -132,14 +132,14 @@ describe('when the native module is missing', () => {
     // module is to collect what JavaScript can reach, and that would report a
     // jailbroken, instrumented device as clean — which is worse than failing,
     // because a customer would believe it.
-    await expect(load({ apiKey: 'fly_pk_us_development_test' })).rejects.toThrow(/clean/)
+    await expect(load({ apiKey: 'fly_pk_development_test' })).rejects.toThrow(/clean/)
   })
 })
 
 describe('identify', () => {
   it('passes the tag through and defaults to submitting', async () => {
     const { identify } = installNative()
-    const fingerly = await load({ apiKey: 'fly_pk_us_development_test' })
+    const fingerly = await load({ apiKey: 'fly_pk_development_test' })
     await fingerly.identify({ tag: 'checkout' })
 
     expect(identify).toHaveBeenCalledWith('checkout', true)
@@ -147,7 +147,7 @@ describe('identify', () => {
 
   it('sends a null tag rather than undefined, which the bridge cannot carry', async () => {
     const { identify } = installNative()
-    const fingerly = await load({ apiKey: 'fly_pk_us_development_test' })
+    const fingerly = await load({ apiKey: 'fly_pk_development_test' })
     await fingerly.identify()
 
     expect(identify).toHaveBeenCalledWith(null, true)
@@ -155,7 +155,7 @@ describe('identify', () => {
 
   it('honours submit: false', async () => {
     const { identify } = installNative()
-    const fingerly = await load({ apiKey: 'fly_pk_us_development_test' })
+    const fingerly = await load({ apiKey: 'fly_pk_development_test' })
     await fingerly.identify({ submit: false })
 
     expect(identify).toHaveBeenCalledWith(null, false)
@@ -163,7 +163,7 @@ describe('identify', () => {
 
   it('parses the native result rather than handing back a string', async () => {
     installNative()
-    const fingerly = await load({ apiKey: 'fly_pk_us_development_test' })
+    const fingerly = await load({ apiKey: 'fly_pk_development_test' })
     const result = await fingerly.identify()
 
     expect(result.requestId).toBe('req_123')
@@ -176,7 +176,7 @@ describe('identify', () => {
     // survive a round trip through it. A field the native side sends and this
     // side drops is invisible until an app reads undefined in production.
     installNative()
-    const fingerly = await load({ apiKey: 'fly_pk_us_development_test' })
+    const fingerly = await load({ apiKey: 'fly_pk_development_test' })
     const result = await fingerly.identify()
 
     expect(result.visitorId).toBe('vis_7Kq3')
@@ -217,7 +217,7 @@ describe('identify', () => {
     const collect = vi.fn(async () => JSON.stringify({ schema: 1, sources: {} }))
     NativeModules.Fingerly = { configure, identify, collect, sdkVersion: '0.1.0' }
 
-    const fingerly = await load({ apiKey: 'fly_pk_us_development_test' })
+    const fingerly = await load({ apiKey: 'fly_pk_development_test' })
     const result = await fingerly.identify({ submit: false })
 
     expect(result.suspectScore).toBeNull()
@@ -232,7 +232,7 @@ describe('identify', () => {
     // to give a well-defined answer rather than throwing on undefined — which
     // would typecheck cleanly and fail at runtime, the worst combination.
     installNative()
-    const fingerly = await load({ apiKey: 'fly_pk_us_development_test' })
+    const fingerly = await load({ apiKey: 'fly_pk_development_test' })
     const result = await fingerly.identify()
 
     expect(result.verdicts.root.value).toBe(false)
@@ -246,7 +246,7 @@ describe('identify', () => {
     // in the codebase returns when its inputs are missing. A caller that needs
     // to tell that from "we looked and found nothing" reads the length.
     installNative()
-    const fingerly = await load({ apiKey: 'fly_pk_us_development_test' })
+    const fingerly = await load({ apiKey: 'fly_pk_development_test' })
     const result = await fingerly.identify()
 
     expect(result.verdicts.root.reasons).toEqual([])
@@ -265,7 +265,7 @@ describe('native failures', () => {
       sdkVersion: '0.1.0',
     }
 
-    const fingerly = await load({ apiKey: 'fly_pk_us_development_test' })
+    const fingerly = await load({ apiKey: 'fly_pk_development_test' })
 
     await expect(fingerly.identify()).rejects.toMatchObject({
       name: 'FingerlyError',
@@ -285,7 +285,7 @@ describe('native failures', () => {
       sdkVersion: '0.1.0',
     }
 
-    const fingerly = await load({ apiKey: 'fly_pk_us_development_test' })
+    const fingerly = await load({ apiKey: 'fly_pk_development_test' })
 
     await expect(fingerly.collect()).rejects.toMatchObject({
       name: 'FingerlyError',
@@ -298,7 +298,7 @@ describe('native failures', () => {
 describe('consent', () => {
   it('defaults to granted, so an integration that never mentions it is unchanged', async () => {
     const { configure, identify } = installNative()
-    const fingerly = await load({ apiKey: 'fly_pk_us_development_test' })
+    const fingerly = await load({ apiKey: 'fly_pk_development_test' })
 
     expect(configure.mock.calls[0]?.[3]).toBe('granted')
     expect(fingerly.consent).toBe('granted')
@@ -308,9 +308,9 @@ describe('consent', () => {
 
   it.each(['pending', 'denied'] as const)('passes %s through to the native configure', async (consent) => {
     const { configure } = installNative()
-    const fingerly = await load({ apiKey: 'fly_pk_us_development_test', consent })
+    const fingerly = await load({ apiKey: 'fly_pk_development_test', consent })
 
-    expect(configure).toHaveBeenCalledWith('fly_pk_us_development_test', '', 'react-native-ios', consent)
+    expect(configure).toHaveBeenCalledWith('fly_pk_development_test', '', 'react-native-ios', consent)
     expect(fingerly.consent).toBe(consent)
   })
 
@@ -318,14 +318,14 @@ describe('consent', () => {
     const { configure } = installNative()
 
     await expect(
-      load({ apiKey: 'fly_pk_us_development_test', consent: 'accepted' as unknown as 'granted' }),
+      load({ apiKey: 'fly_pk_development_test', consent: 'accepted' as unknown as 'granted' }),
     ).rejects.toThrow(TypeError)
     expect(configure).not.toHaveBeenCalled()
   })
 
   it('forwards setConsent to the native module and keeps the getter in step', async () => {
     const { setConsent } = installNative()
-    const fingerly = await load({ apiKey: 'fly_pk_us_development_test', consent: 'pending' })
+    const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'pending' })
 
     fingerly.setConsent('granted')
     expect(setConsent).toHaveBeenLastCalledWith('granted')
@@ -338,7 +338,7 @@ describe('consent', () => {
 
   it('does not forward an unknown state from setConsent', async () => {
     const { setConsent } = installNative()
-    const fingerly = await load({ apiKey: 'fly_pk_us_development_test' })
+    const fingerly = await load({ apiKey: 'fly_pk_development_test' })
 
     expect(() => fingerly.setConsent(true as unknown as 'granted')).toThrow(TypeError)
     expect(setConsent).not.toHaveBeenCalled()
@@ -349,7 +349,7 @@ describe('consent', () => {
     'turns an iOS consent_required rejection into a ConsentError (%s)',
     async (consent) => {
       installGatedNative('ios')
-      const fingerly = await load({ apiKey: 'fly_pk_us_development_test', consent })
+      const fingerly = await load({ apiKey: 'fly_pk_development_test', consent })
 
       const failure = await fingerly.identify().catch((error: unknown) => error)
       expect(failure).toBeInstanceOf(ConsentError)
@@ -367,7 +367,7 @@ describe('consent', () => {
   it('reads the state from the message when the bridge sends no userInfo, as Android does', async () => {
     Platform.OS = 'android'
     installGatedNative('android')
-    const fingerly = await load({ apiKey: 'fly_pk_us_development_test', consent: 'denied' })
+    const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'denied' })
 
     await expect(fingerly.collect()).rejects.toMatchObject({
       name: 'ConsentError',
@@ -386,14 +386,14 @@ describe('consent', () => {
       collect: vi.fn(),
       sdkVersion: '0.1.0',
     }
-    const fingerly = await load({ apiKey: 'fly_pk_us_development_test' })
+    const fingerly = await load({ apiKey: 'fly_pk_development_test' })
 
     await expect(fingerly.identify()).rejects.toMatchObject({ name: 'ConsentError', state: 'pending' })
   })
 
   it('identifies once consent is granted', async () => {
     const { identify } = installGatedNative('ios')
-    const fingerly = await load({ apiKey: 'fly_pk_us_development_test', consent: 'pending' })
+    const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'pending' })
 
     await expect(fingerly.identify()).rejects.toBeInstanceOf(ConsentError)
     await expect(fingerly.collect()).rejects.toBeInstanceOf(ConsentError)
@@ -407,7 +407,7 @@ describe('consent', () => {
 describe('the endpoint', () => {
   it('passes an empty string when unset, so the native default applies', async () => {
     const { configure } = installNative()
-    await load({ apiKey: 'fly_pk_us_development_test' })
+    await load({ apiKey: 'fly_pk_development_test' })
 
     // Not `undefined`: the bridge signature is a non-null string, and the
     // native side treats empty as "use the default". Sending undefined across
@@ -417,9 +417,9 @@ describe('the endpoint', () => {
 
   it('passes one through when given', async () => {
     const { configure } = installNative()
-    await load({ apiKey: 'fly_pk_us_development_test', endpoint: 'https://api.example.com' })
+    await load({ apiKey: 'fly_pk_development_test', endpoint: 'https://api.example.com' })
 
-    expect(configure).toHaveBeenCalledWith('fly_pk_us_development_test', 'https://api.example.com', 'react-native-ios', 'granted')
+    expect(configure).toHaveBeenCalledWith('fly_pk_development_test', 'https://api.example.com', 'react-native-ios', 'granted')
   })
 })
 
