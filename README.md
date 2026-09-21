@@ -15,7 +15,7 @@ Requires React Native **0.73** or newer. Autolinking handles the rest.
 ```ts
 import { load } from '@fingerly/react-native'
 
-const fingerly = await load({ apiKey: 'fly_pk_us_production_…' })
+const fingerly = await load({ apiKey: 'fly_pk_production_…' })
 const { requestId, visitorId, suspectScore, verdicts } = await fingerly.identify({ tag: 'checkout' })
 
 if (verdicts.jailbreak.value && verdicts.jailbreak.confidence === 'high') {
@@ -47,7 +47,7 @@ when it arrives:
 ```ts
 import { ConsentError, load } from '@fingerly/react-native'
 
-const fingerly = await load({ apiKey: 'fly_pk_us_production_…', consent: 'pending' })
+const fingerly = await load({ apiKey: 'fly_pk_production_…', consent: 'pending' })
 
 // From your consent tool's callback:
 fingerly.setConsent(accepted ? 'granted' : 'denied')
