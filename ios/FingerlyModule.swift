@@ -40,7 +40,7 @@ final class FingerlyModule: NSObject {
         ["sdkVersion": FingerlyBridge.sdkVersion]
     }
 
-    /// `consent` is always sent by `src/index.ts`, `granted` when the app
+    /// `consent` is always sent by `src/index.ts`, `pending` when the app
     /// passed none. The native bridge reads anything it does not recognise as
     /// `pending`.
     @objc(configure:endpoint:platform:consent:)

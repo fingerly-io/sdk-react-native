@@ -22,6 +22,8 @@
  * import { load } from '@fingerly/react-native'
  *
  * const fingerly = await load({ apiKey: 'fly_pk_production_…' })
+ * // From the consent tool, once the user has agreed (or another lawful basis applies).
+ * fingerly.setConsent('granted')
  * const { requestId, verdicts } = await fingerly.identify({ tag: 'checkout' })
  *
  * if (verdicts.jailbreak.value && verdicts.jailbreak.confidence === 'high') {
@@ -100,13 +102,13 @@ export type ConsentState = 'granted' | 'pending' | 'denied'
 
 export interface FingerlyOptions extends MobileFingerlyOptions {
   /**
-   * The consent to start from. `granted` when omitted, which is how every
-   * integration written before this option behaves.
+   * The consent to start from. `pending` when omitted.
    *
-   * An app whose legal basis for identifying users is consent passes
-   * `pending` and calls [[FingerlyClient.setConsent]] once its consent tool
-   * has an answer. Until then `identify()` and `collect()` reject with a
-   * [[ConsentError]] and the native SDK runs no source and sends nothing.
+   * Leave it `pending` and call [[FingerlyClient.setConsent]] once the app's
+   * consent tool has an answer. Until consent is `granted`, `identify()` and
+   * `collect()` reject with a [[ConsentError]] and the native SDK runs no
+   * source and sends nothing. Pass `granted` only once the user has agreed, or
+   * where another lawful basis applies.
    */
   consent?: ConsentState
 }
@@ -198,7 +200,7 @@ function refusedConsent(record: Record<string, unknown> | undefined, message: st
  * keeps one client per process: every `FingerlyClient` here talks to it, and a
  * second `load` changes the state for all of them.
  */
-let currentConsent: ConsentState = 'granted'
+let currentConsent: ConsentState = 'pending'
 
 function fingerlyError(error: unknown): FingerlyError {
   if (error instanceof FingerlyError) return error
@@ -374,10 +376,10 @@ export class FingerlyClient {
  *
  * Loading collects and sends nothing, whatever the consent, so it is safe to
  * call at launch before the user has been asked. The consent passed here, or
- * `granted` when there is none, replaces whatever the native SDK held before.
+ * `pending` when there is none, replaces whatever the native SDK held before.
  */
 export async function load(options: FingerlyOptions): Promise<FingerlyClient> {
-  const consent = options.consent ?? 'granted'
+  const consent = options.consent ?? 'pending'
   assertConsentState(consent)
 
   const native = nativeModule()

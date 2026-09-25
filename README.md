@@ -15,7 +15,8 @@ Requires React Native **0.73** or newer. Autolinking handles the rest.
 ```ts
 import { load } from '@fingerly/react-native'
 
-const fingerly = await load({ apiKey: 'fly_pk_production_…' })
+// consent: only once you have consent (or another lawful basis)
+const fingerly = await load({ apiKey: 'fly_pk_production_…', consent: 'granted' })
 const { requestId, visitorId, suspectScore, verdicts } = await fingerly.identify({ tag: 'checkout' })
 
 if (verdicts.jailbreak.value && verdicts.jailbreak.confidence === 'high') {
@@ -40,14 +41,14 @@ Pass `{ submit: false }` to collect and score without sending anything.
 
 ## Consent
 
-If your legal basis for identifying users is consent (ePrivacy, GDPR), load the
-SDK with `consent: 'pending'` and pass on the answer from your consent tool
-when it arrives:
+The SDK identifies nobody until it is told consent is `'granted'`. The usual
+pattern is to load it at launch with the default `'pending'` and pass on the
+answer from your consent tool when it arrives:
 
 ```ts
 import { ConsentError, load } from '@fingerly/react-native'
 
-const fingerly = await load({ apiKey: 'fly_pk_production_…', consent: 'pending' })
+const fingerly = await load({ apiKey: 'fly_pk_production_…' }) // consent is 'pending'
 
 // From your consent tool's callback:
 fingerly.setConsent(accepted ? 'granted' : 'denied')
@@ -57,16 +58,18 @@ fingerly.consent   // 'granted', 'pending' or 'denied'
 
 | Option / method | What it does |
 | --- | --- |
-| `consent` option on `load` | The starting state: `'granted'` (the default), `'pending'` or `'denied'`. |
+| `consent` option on `load` | The starting state: `'pending'` (the default), `'granted'` or `'denied'`. |
 | `setConsent(state)` | Records the decision. Synchronous and safe to call repeatedly. |
 | `consent` | The state last given to the native SDK, read-only. |
 
-The default is `'granted'`, so an integration that never mentions consent
-behaves exactly as before. Anything other than the three states throws a
-`TypeError` rather than being guessed at.
+The default is `'pending'`, so an integration that never mentions consent
+identifies nobody. Pass `consent: 'granted'` to `load` only when you already
+have consent, or another lawful basis. Anything other than the three states
+throws a `TypeError` rather than being guessed at.
 
-While the state is anything else, the native SDK runs no source, reads and
-writes no keychain entry or preference for fingerprinting, and sends nothing.
+While the state is anything but `granted`, the native SDK runs no source,
+reads and writes no keychain entry or preference for fingerprinting, and sends
+nothing.
 `identify()` and `collect()` reject with a `ConsentError`, whose `code` is
 `'consent_required'` and whose `state` says which state refused the call:
 
@@ -87,8 +90,13 @@ starts and before anything is submitted, and that call rejects with
 
 Loading collects and sends nothing, whatever the state, so calling `load` at
 launch before the user has been asked is safe. The native SDK holds one state
-for the whole app: each `load` sets it to the `consent` passed, or `'granted'`
+for the whole app: each `load` sets it to the `consent` passed, or `'pending'`
 when there is none, so pass `consent` on every `load`.
+
+Every submission the native SDK sends carries the state it was collected under,
+`"consent": "granted"`, and the server refuses any other value with
+`422 consent_required`. The native SDK only sends while consent is granted, so
+that refusal should never be seen.
 
 ## This package collects nothing
 

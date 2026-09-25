@@ -52,7 +52,7 @@ class FingerlyModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
         // Activity would keep a destroyed screen alive for as long as the
         // client lives, and this one is deliberately long-lived.
         //
-        // `consent` is always sent by `src/index.ts`, `granted` when the app
+        // `consent` is always sent by `src/index.ts`, `pending` when the app
         // passed none, so the state is set rather than left as it was.
         FingerlyBridge.configure(reactApplicationContext, apiKey, endpoint, platform, consent)
     }
