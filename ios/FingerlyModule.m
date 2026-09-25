@@ -32,4 +32,7 @@ RCT_EXTERN_METHOD(identify:(NSString *_Nullable)tag
 RCT_EXTERN_METHOD(collect:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 
+RCT_EXTERN_METHOD(deleteStoredIdentity:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+
 @end

@@ -14,7 +14,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NativeModules, Platform } from './stub-react-native.js'
 
 // Imported after the stub so the module under test binds to the same objects.
-const { ConsentError, FingerlyError, load, nativeVersion } = await import('../src/index.js')
+const { ConsentError, FingerlyError, deleteStoredIdentity, load, nativeVersion } = await import('../src/index.js')
 
 /** A native module that records what it was handed. */
 function installNative() {
@@ -439,5 +439,46 @@ describe('nativeVersion', () => {
 
   it('is undefined rather than throwing when there is no native module', () => {
     expect(nativeVersion()).toBeUndefined()
+  })
+})
+
+describe('deleteStoredIdentity', () => {
+  it('asks the native SDK, without load or consent', async () => {
+    const { configure, setConsent } = installNative()
+    const remove = vi.fn(async () => null)
+    ;(NativeModules.Fingerly as Record<string, unknown>).deleteStoredIdentity = remove
+
+    await expect(deleteStoredIdentity()).resolves.toBeUndefined()
+    expect(remove).toHaveBeenCalledTimes(1)
+    expect(configure).not.toHaveBeenCalled()
+    expect(setConsent).not.toHaveBeenCalled()
+  })
+
+  it('says so when the native SDK in the app predates it', async () => {
+    installNative()
+
+    await expect(deleteStoredIdentity()).rejects.toBeInstanceOf(FingerlyError)
+    await expect(deleteStoredIdentity()).rejects.toThrow(/not available in the native Fingerly SDK on ios/)
+  })
+
+  it('surfaces a failed delete as a FingerlyError, as both native modules reject it', async () => {
+    Platform.OS = 'android'
+    installNative()
+    ;(NativeModules.Fingerly as Record<string, unknown>).deleteStoredIdentity = vi.fn(async () => {
+      throw Object.assign(new Error('Fingerly could not delete its stored install record'), {
+        code: 'delete_failed',
+      })
+    })
+
+    const error = await deleteStoredIdentity().catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(FingerlyError)
+    expect((error as InstanceType<typeof FingerlyError>).message).toBe(
+      'Fingerly could not delete its stored install record',
+    )
+    expect((error as InstanceType<typeof FingerlyError>).status).toBeUndefined()
+  })
+
+  it('reports the missing native module rather than throwing on undefined', async () => {
+    await expect(deleteStoredIdentity()).rejects.toThrow(/could not find its native module/)
   })
 })

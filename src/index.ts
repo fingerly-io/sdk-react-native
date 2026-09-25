@@ -58,6 +58,8 @@ interface FingerlyNativeModule {
   setConsent(state: ConsentState): void
   identify(tag: string | null, submit: boolean): Promise<string>
   collect(): Promise<string>
+  /** Optional because a native module built before it existed does not have it. */
+  deleteStoredIdentity?(): Promise<null>
   readonly sdkVersion: string
 }
 
@@ -392,6 +394,37 @@ export async function load(options: FingerlyOptions): Promise<FingerlyClient> {
   }
   currentConsent = consent
   return new FingerlyClient()
+}
+
+/**
+ * Delete the install record the native SDK keeps on the device.
+ *
+ * Call it when a user asks for their data to be erased or deletes their
+ * account, so the device stops presenting the install ID the server knows it
+ * by. Needs no [[load]] and no consent, and sends nothing. Resolves once no
+ * record remains, including when there was none. The next identification made
+ * with consent starts a new record; to stop identifying as well, set consent
+ * to `'denied'` first, because a call already running may write a fresh record.
+ *
+ * Rejects with a [[FingerlyError]] when the delete fails, and when the native
+ * SDK in the app predates this call.
+ */
+export async function deleteStoredIdentity(): Promise<void> {
+  const native = nativeModule()
+  if (!native) throw new FingerlyError(MISSING_NATIVE_MODULE)
+
+  const remove = native.deleteStoredIdentity
+  if (typeof remove !== 'function') {
+    throw new FingerlyError(
+      `deleteStoredIdentity is not available in the native Fingerly SDK on ${Platform.OS}`,
+    )
+  }
+
+  try {
+    await remove.call(native)
+  } catch (error) {
+    throw fingerlyError(error)
+  }
 }
 
 /** The native SDK's version, which is the one that did the collecting. */

@@ -76,6 +76,23 @@ final class FingerlyModule: NSObject {
         }
     }
 
+    /// Deletes the install record, for a user's erasure or account deletion.
+    ///
+    /// Resolves with nothing once no record remains; a keychain refusal
+    /// rejects with `delete_failed`, the code the Android module uses too.
+    @objc(deleteStoredIdentity:rejecter:)
+    func deleteStoredIdentity(
+        resolve: @escaping RCTPromiseResolveBlock,
+        reject: @escaping RCTPromiseRejectBlock
+    ) {
+        if let error = FingerlyBridge.deleteStoredIdentity() {
+            let code = error.userInfo["code"] as? String ?? "\(error.code)"
+            reject(code, error.localizedDescription, error)
+            return
+        }
+        resolve(nil)
+    }
+
     /// Resolve or reject, once.
     ///
     /// The rejection code is the HTTP status where there was one, as a string,

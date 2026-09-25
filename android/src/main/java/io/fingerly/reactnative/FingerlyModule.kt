@@ -74,6 +74,28 @@ class FingerlyModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
     }
 
     /**
+     * Deletes the install record, for a user's erasure or account deletion.
+     *
+     * Resolves with nothing once no record remains, and otherwise rejects with
+     * `delete_failed`, the code the iOS module uses for the same failure. A
+     * small file delete, done here on the native modules thread rather than
+     * handed off: it needs neither configuration nor consent.
+     */
+    @ReactMethod
+    fun deleteStoredIdentity(promise: Promise) {
+        val deleted = try {
+            FingerlyBridge.deleteStoredIdentity(reactApplicationContext)
+        } catch (error: Throwable) {
+            false
+        }
+        if (deleted) {
+            promise.resolve(null)
+        } else {
+            promise.reject(DELETE_FAILED, "Fingerly could not delete its stored install record")
+        }
+    }
+
+    /**
      * Resolve or reject, once.
      *
      * The rejection code is the HTTP status where there was one, as a string,
@@ -92,5 +114,9 @@ class FingerlyModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
         override fun onError(code: String, message: String) {
             promise.reject(code, message)
         }
+    }
+
+    private companion object {
+        const val DELETE_FAILED = "delete_failed"
     }
 }

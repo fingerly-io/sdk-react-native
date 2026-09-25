@@ -98,6 +98,22 @@ Every submission the native SDK sends carries the state it was collected under,
 `422 consent_required`. The native SDK only sends while consent is granted, so
 that refusal should never be seen.
 
+## Erasure
+
+```ts
+import { deleteStoredIdentity } from '@fingerly/react-native'
+
+await deleteStoredIdentity()
+```
+
+Deletes the install record the native SDK keeps on the device, including the
+install ID the server recognises it by. Call it when a user asks for their data
+to be erased or deletes their account. It needs no `load` and no consent, and
+sends nothing, and resolves once no record remains, including when there was
+none. It rejects with a `FingerlyError` when the delete fails. The next
+identification made with consent starts a new record; to stop identifying as
+well, set consent to `'denied'` first.
+
 ## This package collects nothing
 
 That is the design, not a limitation, and it is the most important thing to
