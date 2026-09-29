@@ -4,6 +4,8 @@
   "private": true,
   "packageManager": "pnpm@9.0.0",
   "description": "React Native SDK — a bridge to the native iOS and Android SDKs, which do the collecting",
+  "license": "Apache-2.0",
+  "repository": {"type": "git", "url": "https://github.com/fingerly-io/sdk-react-native.git"},
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
