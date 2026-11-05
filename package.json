@@ -26,8 +26,9 @@
     "react-native": ">=0.73"
   },
   "scripts": {
-    "build": "tsup",
-    "lint": "tsc --noEmit",
+    "build:types": "pnpm --filter @fingerly/types build",
+    "build": "pnpm build:types && tsup",
+    "lint": "pnpm build:types && tsc --noEmit",
     "test": "vitest run"
   },
   "devDependencies": {
