@@ -126,6 +126,14 @@ export class FingerlyError extends Error {
     message: string,
     /** The HTTP status when the failure came from a server response. */
     readonly status?: number,
+    /**
+     * How long the server asked the app to wait, in milliseconds, from its
+     * `Retry-After`, when the native SDK gave up on a 429 or 503 that named
+     * one. Wait at least this long before identifying again. Undefined when
+     * the response named no wait, and on Android until the native Android
+     * bridge passes the header on.
+     */
+    readonly retryAfterMs?: number,
   ) {
     super(message)
   }
@@ -232,7 +240,21 @@ function fingerlyError(error: unknown): FingerlyError {
       ? parsedStatus
       : undefined
 
-  return new FingerlyError(message, status)
+  return new FingerlyError(message, status, retryAfterOf(record))
+}
+
+/**
+ * The wait a native transport failure carried. The iOS bridge puts it in the
+ * NSError's `userInfo.retryAfterMs`, which React Native passes through as the
+ * rejection's `userInfo`.
+ */
+function retryAfterOf(record: Record<string, unknown> | undefined): number | undefined {
+  const userInfo = record?.userInfo
+  const wait =
+    typeof userInfo === 'object' && userInfo !== null
+      ? (userInfo as Record<string, unknown>).retryAfterMs
+      : undefined
+  return typeof wait === 'number' && Number.isFinite(wait) && wait >= 0 ? wait : undefined
 }
 
 async function invokeNative(operation: () => Promise<string>): Promise<string> {

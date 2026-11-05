@@ -274,6 +274,49 @@ describe('native failures', () => {
     })
   })
 
+  it('carries the iOS bridge retryAfterMs on the error', async () => {
+    // What RCTPromiseRejectBlock delivers for the iOS bridge's NSError.
+    const nativeError = Object.assign(new Error('Too many requests'), {
+      code: '429',
+      domain: 'io.fingerly.sdk',
+      userInfo: { retryable: true, retryAfterMs: 3000 },
+    })
+    NativeModules.Fingerly = {
+      configure: vi.fn(),
+      identify: vi.fn(async () => {
+        throw nativeError
+      }),
+      collect: vi.fn(),
+      sdkVersion: '0.1.0',
+    }
+
+    const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
+
+    await expect(fingerly.identify()).rejects.toMatchObject({
+      name: 'FingerlyError',
+      status: 429,
+      retryAfterMs: 3000,
+    })
+  })
+
+  it('leaves retryAfterMs undefined when no usable wait was named', async () => {
+    for (const userInfo of [undefined, null, { retryAfterMs: '3' }, { retryAfterMs: -5 }]) {
+      const nativeError = Object.assign(new Error('unavailable'), { code: '503', userInfo })
+      NativeModules.Fingerly = {
+        configure: vi.fn(),
+        identify: vi.fn(async () => {
+          throw nativeError
+        }),
+        collect: vi.fn(),
+        sdkVersion: '0.1.0',
+      }
+      const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
+      const error = await fingerly.identify().catch((caught: unknown) => caught)
+      expect(error).toBeInstanceOf(FingerlyError)
+      expect((error as InstanceType<typeof FingerlyError>).retryAfterMs).toBeUndefined()
+    }
+  })
+
   it('does not mistake a native sentinel code for an HTTP status', async () => {
     const nativeError = Object.assign(new Error('no report'), { code: '-1' })
     NativeModules.Fingerly = {

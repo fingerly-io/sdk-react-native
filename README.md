@@ -232,6 +232,11 @@ Both are your configuration rather than the user's behaviour, and neither is
 worth retrying. The native SDK retries the ones that are (429 and 5xx) with
 full-jitter backoff before it ever rejects.
 
+When the server asked for a pause with `Retry-After`, the error carries it as
+`retryAfterMs`. Wait at least that long before identifying again. It is
+undefined when the response named no wait, and on Android until the native
+Android bridge passes the header on.
+
 A call refused for want of consent rejects with `ConsentError`, a subclass of
 `FingerlyError` with `code: 'consent_required'`, a `state`, and no `status`.
 Answer it with `setConsent`, not a retry. See [Consent](#consent).
