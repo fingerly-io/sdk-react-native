@@ -338,6 +338,36 @@ describe('native failures', () => {
   })
 })
 
+describe('unreadable native answers', () => {
+  it('rejects with a FingerlyError rather than a SyntaxError or TypeError', async () => {
+    for (const raw of ['not json', 'null', '[1, 2]', '"text"']) {
+      NativeModules.Fingerly = {
+        configure: vi.fn(),
+        identify: vi.fn(async () => raw),
+        collect: vi.fn(async () => raw),
+        sdkVersion: '0.1.0',
+      }
+      const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
+      await expect(fingerly.identify(), raw).rejects.toBeInstanceOf(FingerlyError)
+      await expect(fingerly.collect(), raw).rejects.toBeInstanceOf(FingerlyError)
+    }
+  })
+
+  it('tolerates a result without reason and with members it does not know', async () => {
+    NativeModules.Fingerly = {
+      configure: vi.fn(),
+      identify: vi.fn(async () =>
+        JSON.stringify({ requestId: 'req_1', verdicts: {}, report: { schema: 1, sources: {} }, somethingNew: { a: 1 } }),
+      ),
+      collect: vi.fn(),
+      sdkVersion: '0.1.0',
+    }
+    const result = await (await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })).identify()
+    expect(result.requestId).toBe('req_1')
+    expect(result.reason).toBeUndefined()
+  })
+})
+
 describe('consent', () => {
   it('defaults to pending, so nothing is identified until consent is granted', async () => {
     const { configure, identify, collect } = installGatedNative('ios')
