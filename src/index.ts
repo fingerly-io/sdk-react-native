@@ -56,7 +56,7 @@ import type {
 interface FingerlyNativeModule {
   configure(apiKey: string, endpoint: string, platform: string, consent: ConsentState): void
   setConsent(state: ConsentState): void
-  identify(tag: string | null, submit: boolean): Promise<string>
+  identify(tag: string | null, submit: boolean, automatic: boolean): Promise<string>
   collect(): Promise<string>
   /** Optional because a native module built before it existed does not have it. */
   deleteStoredIdentity?(): Promise<null>
@@ -115,7 +115,17 @@ export interface FingerlyOptions extends MobileFingerlyOptions {
   consent?: ConsentState
 }
 
-export type IdentifyOptions = MobileIdentifyOptions
+export interface IdentifyOptions extends MobileIdentifyOptions {
+  /**
+   * True for a call the app makes on its own rather than in answer to the
+   * user: on start, on a timer, on returning to the foreground. An automatic
+   * call joins an identification already in flight instead of starting
+   * another, and waits out a transient failure instead of repeating it at
+   * once. False when omitted. On Android it has no effect until the native
+   * Android SDK supports it.
+   */
+  automatic?: boolean
+}
 
 /** A native or transport failure surfaced consistently on both platforms. */
 export class FingerlyError extends Error {
@@ -386,7 +396,7 @@ export class FingerlyClient {
     if (!native) throw new FingerlyError(MISSING_NATIVE_MODULE)
 
     const raw = await invokeNative(() =>
-      native.identify(options.tag ?? null, options.submit !== false),
+      native.identify(options.tag ?? null, options.submit !== false, options.automatic === true),
     )
     const parsed = parseNative(raw) as unknown as NativeIdentifyResult
 

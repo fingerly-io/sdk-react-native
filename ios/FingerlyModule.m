@@ -26,6 +26,7 @@ RCT_EXTERN_METHOD(setConsent:(NSString *)state)
 
 RCT_EXTERN_METHOD(identify:(NSString *_Nullable)tag
                   submit:(nonnull NSNumber *)submit
+                  automatic:(nonnull NSNumber *)automatic
                   resolver:(RCTPromiseResolveBlock)resolve
                   rejecter:(RCTPromiseRejectBlock)reject)
 

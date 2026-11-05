@@ -63,8 +63,14 @@ class FingerlyModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
         FingerlyBridge.setConsent(state)
     }
 
+    /**
+     * `automatic` is accepted for parity with iOS and not read: the native
+     * Android bridge has no such option yet, so every call is identified as
+     * a user's call.
+     */
     @ReactMethod
-    fun identify(tag: String?, submit: Boolean, promise: Promise) {
+    @Suppress("UNUSED_PARAMETER")
+    fun identify(tag: String?, submit: Boolean, automatic: Boolean, promise: Promise) {
         FingerlyBridge.identify(tag, submit, settle(promise))
     }
 

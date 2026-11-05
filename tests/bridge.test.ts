@@ -142,7 +142,7 @@ describe('identify', () => {
     const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
     await fingerly.identify({ tag: 'checkout' })
 
-    expect(identify).toHaveBeenCalledWith('checkout', true)
+    expect(identify).toHaveBeenCalledWith('checkout', true, false)
   })
 
   it('sends a null tag rather than undefined, which the bridge cannot carry', async () => {
@@ -150,7 +150,7 @@ describe('identify', () => {
     const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
     await fingerly.identify()
 
-    expect(identify).toHaveBeenCalledWith(null, true)
+    expect(identify).toHaveBeenCalledWith(null, true, false)
   })
 
   it('honours submit: false', async () => {
@@ -158,7 +158,15 @@ describe('identify', () => {
     const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
     await fingerly.identify({ submit: false })
 
-    expect(identify).toHaveBeenCalledWith(null, false)
+    expect(identify).toHaveBeenCalledWith(null, false, false)
+  })
+
+  it('passes automatic through, false unless asked for', async () => {
+    const { identify } = installNative()
+    const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
+    await fingerly.identify({ tag: 'timer', automatic: true })
+
+    expect(identify).toHaveBeenCalledWith('timer', true, true)
   })
 
   it('parses the native result rather than handing back a string', async () => {

@@ -54,14 +54,21 @@ final class FingerlyModule: NSObject {
         FingerlyBridge.setConsent(state)
     }
 
-    @objc(identify:submit:resolver:rejecter:)
+    /// `automatic` marks a call the app made on its own, which joins the
+    /// identification already in flight instead of starting another.
+    @objc(identify:submit:automatic:resolver:rejecter:)
     func identify(
         tag: String?,
         submit: NSNumber,
+        automatic: NSNumber,
         resolve: @escaping RCTPromiseResolveBlock,
         reject: @escaping RCTPromiseRejectBlock
     ) {
-        FingerlyBridge.identify(tag: tag, submit: submit.boolValue) { json, error in
+        FingerlyBridge.identify(
+            tag: tag,
+            submit: submit.boolValue,
+            automatic: automatic.boolValue
+        ) { json, error in
             Self.settle(json, error, resolve, reject)
         }
     }

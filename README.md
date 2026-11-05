@@ -39,6 +39,12 @@ patched out.
 
 Pass `{ submit: false }` to collect and score without sending anything.
 
+Pass `{ automatic: true }` for a call your app makes on its own rather than in
+answer to the user: on start, on a timer, on returning to the foreground. It
+joins an identification already in flight instead of starting another, and
+waits out a transient failure instead of repeating it at once. On Android it
+has no effect until the native Android SDK supports it.
+
 ## Consent
 
 The SDK identifies nobody until it is told consent is `'granted'`. The usual
