@@ -59,13 +59,12 @@ dependencies {
 
     // The SDK that does the collecting.
     //
-    // Not published yet — see the note in the package README. Until it is, an
-    // app building this from the monorepo substitutes the local project:
-    //
-    //     includeBuild('../../mobile/android') {
-    //         dependencySubstitution {
-    //             substitute module('io.fingerly:fingerly') using project(':fingerly')
-    //         }
-    //     }
+    // Not published yet — see the note in the package README. Until it is,
+    // publish the native SDK to Maven Local (`./gradlew
+    // :fingerly:publishToMavenLocal` in sdk-android), which the repositories
+    // above check after Maven Central. A composite build (`includeBuild` with
+    // a dependency substitution) does not work with current React Native
+    // apps: they build with AGP 9 while the native SDK builds with AGP 8, and
+    // Gradle refuses two AGP versions in one build.
     implementation 'io.fingerly:fingerly:0.1.0'
 }
