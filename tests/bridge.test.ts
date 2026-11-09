@@ -75,7 +75,7 @@ function installGatedNative(shape: 'ios' | 'android' = 'ios') {
   })
   const identify = vi.fn(async () => {
     if (consent !== 'granted') throw refusal()
-    return JSON.stringify({ requestId: 'req_after_consent', verdicts: {}, report: { schema: 1, sources: {} } })
+    return JSON.stringify({ requestId: 'req_after_consent', report: { schema: 1, sources: {} } })
   })
   const collect = vi.fn(async () => {
     if (consent !== 'granted') throw refusal()
@@ -175,11 +175,10 @@ describe('identify', () => {
     const result = await fingerly.identify()
 
     expect(result.requestId).toBe('req_123')
-    expect(result.verdicts.jailbreak.value).toBe(false)
     expect(result.report.schema).toBe(1)
   })
 
-  it('carries the server\'s verdict across the bridge', async () => {
+  it('carries the server\'s answer across the bridge', async () => {
     // The bridge is a JSON string, so every field the native SDKs added has to
     // survive a round trip through it. A field the native side sends and this
     // side drops is invisible until an app reads undefined in production.
@@ -204,60 +203,134 @@ describe('identify', () => {
     // nothing scored the submission. Null and 0 are different answers - 0 is
     // "scored, nothing fired" - and collapsing them here would report a clean
     // visitor for a check that never happened.
-    const configure = vi.fn()
-    const identify = vi.fn(async () =>
-      JSON.stringify({
-        requestId: '',
-        visitorId: '',
-        visitorIsNew: false,
-        visitorConfidence: 0,
-        identifiable: false,
-        duplicate: false,
-        state: '',
-        reason: 'not-submitted',
-        suspectScore: null,
-        suspectLevel: null,
-        triggers: [],
-        verdicts: {},
-        report: { schema: 1, sources: {} },
-      }),
-    )
-    const collect = vi.fn(async () => JSON.stringify({ schema: 1, sources: {} }))
-    NativeModules.Fingerly = { configure, identify, collect, sdkVersion: '0.1.0' }
+    NativeModules.Fingerly = {
+      configure: vi.fn(),
+      identify: vi.fn(async () =>
+        JSON.stringify({
+          requestId: 'req_1',
+          visitorId: 'vis_1',
+          suspectScore: null,
+          suspectLevel: null,
+          triggers: [],
+          report: { schema: 1, sources: {} },
+        }),
+      ),
+      collect: vi.fn(),
+      sdkVersion: '0.1.0',
+    }
 
     const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
-    const result = await fingerly.identify({ submit: false })
+    const result = await fingerly.identify()
 
     expect(result.suspectScore).toBeNull()
     expect(result.suspectLevel).toBeNull()
     expect(result.triggers).toEqual([])
+  })
+
+  it.each([
+    ['Android writes null', { visitorIsNew: null, visitorConfidence: null, identifiable: null, duplicate: null, suspectScore: null, suspectLevel: null }],
+    ['iOS leaves the key out', {}],
+  ])('reads an answer the server did not give as null: %s', async (_label, unsaid) => {
+    const { identify } = installNative()
+    identify.mockResolvedValue(
+      JSON.stringify({ requestId: 'req_dup', visitorId: '', state: 'scored', triggers: [], report: { schema: 1, sources: {} }, ...unsaid }),
+    )
+    const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
+    const result = await fingerly.identify()
+
+    for (const field of ['visitorIsNew', 'visitorConfidence', 'identifiable', 'duplicate', 'suspectScore', 'suspectLevel'] as const) {
+      expect(result[field]).toBeNull()
+    }
+  })
+
+  it('keeps a duplicate answer true with its visitor fields empty', async () => {
+    const { identify } = installNative()
+    identify.mockResolvedValue(
+      JSON.stringify({ requestId: 'req_dup', visitorId: '', duplicate: true, state: 'scored', triggers: [], report: { schema: 1, sources: {} } }),
+    )
+    const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
+    const result = await fingerly.identify()
+
+    expect(result.duplicate).toBe(true)
     expect(result.visitorId).toBe('')
+    expect(result.visitorConfidence).toBeNull()
   })
 
-  it('fills in the verdicts this platform cannot answer', async () => {
-    // The iOS SDK does not emit `root`; Android does not emit `jailbreak`.
-    // `MobileVerdicts` declares both, so reading one on the wrong platform has
-    // to give a well-defined answer rather than throwing on undefined — which
-    // would typecheck cleanly and fail at runtime, the worst combination.
+  it('never hands the app a weight, even when the native side still sends one', async () => {
     installNative()
     const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
     const result = await fingerly.identify()
 
-    expect(result.verdicts.root.value).toBe(false)
-    expect(result.verdicts.emulator.value).toBe(false)
-    expect(result.verdicts.appCloner.value).toBe(false)
+    expect(result.triggers).toEqual([
+      { signal: 'patched-natives', group: 'automation', confidence: 'high', reason: '' },
+    ])
+    expect(JSON.stringify(result)).not.toContain('weight')
   })
 
-  it('marks an unanswerable verdict with empty reasons, not merely false', async () => {
-    // The distinction the fill is careful to preserve: an empty `reasons`
-    // beside a false is "this could not be asked", which is what every detector
-    // in the codebase returns when its inputs are missing. A caller that needs
-    // to tell that from "we looked and found nothing" reads the length.
+  it('never hands the app a local conclusion from a stale or forged native answer', async () => {
     installNative()
     const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
     const result = await fingerly.identify()
 
-    expect(result.verdicts.root.reasons).toEqual([])
+    expect(result).not.toHaveProperty('verdicts')
+    expect(JSON.stringify(result)).not.toContain('jailbreak')
+  })
+
+  it.each([
+    ['missing', undefined],
+    ['null', null],
+    ['not a list', 'frida'],
+    ['an object', { signal: 'frida' }],
+  ])('reads triggers that are %s as none', async (_label, triggers) => {
+    NativeModules.Fingerly = {
+      configure: vi.fn(),
+      identify: vi.fn(async () => JSON.stringify({ requestId: 'req_1', triggers, report: { schema: 1, sources: {} } })),
+      collect: vi.fn(),
+      sdkVersion: '0.1.0',
+    }
+    const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
+
+    await expect(fingerly.identify()).resolves.toMatchObject({ requestId: 'req_1', triggers: [] })
+  })
+
+  it('drops trigger entries that are not objects and keeps the rest', async () => {
+    NativeModules.Fingerly = {
+      configure: vi.fn(),
+      identify: vi.fn(async () =>
+        JSON.stringify({ triggers: ['frida', null, 3, ['x'], { signal: 'frida', weight: 9 }], report: {} }),
+      ),
+      collect: vi.fn(),
+      sdkVersion: '0.1.0',
+    }
+    const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
+
+    expect((await fingerly.identify()).triggers).toEqual([{ signal: 'frida' }])
+  })
+
+  it('returns only the raw report for submit: false', async () => {
+    // Forged on purpose: an answer full of server fields and a local conclusion
+    // for a check nobody sent. None of it may survive.
+    installNative()
+    const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
+
+    await expect(fingerly.identify({ submit: false })).resolves.toEqual({ report: { schema: 1, sources: {} } })
+  })
+
+  it.each([
+    ['missing', {}],
+    ['null', { report: null }],
+    ['text', { report: 'text' }],
+    ['a list', { report: [1] }],
+  ])('rejects submit: false when the report is %s', async (_label, answer) => {
+    NativeModules.Fingerly = {
+      configure: vi.fn(),
+      identify: vi.fn(async () => JSON.stringify(answer)),
+      collect: vi.fn(),
+      sdkVersion: '0.1.0',
+    }
+    const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
+
+    await expect(fingerly.identify({ submit: false })).rejects.toBeInstanceOf(FingerlyError)
   })
 })
 
@@ -365,7 +438,7 @@ describe('unreadable native answers', () => {
     NativeModules.Fingerly = {
       configure: vi.fn(),
       identify: vi.fn(async () =>
-        JSON.stringify({ requestId: 'req_1', verdicts: {}, report: { schema: 1, sources: {} }, somethingNew: { a: 1 } }),
+        JSON.stringify({ requestId: 'req_1', report: { schema: 1, sources: {} }, somethingNew: { a: 1 } }),
       ),
       collect: vi.fn(),
       sdkVersion: '0.1.0',
@@ -373,6 +446,7 @@ describe('unreadable native answers', () => {
     const result = await (await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })).identify()
     expect(result.requestId).toBe('req_1')
     expect(result.reason).toBeUndefined()
+    expect(result).not.toHaveProperty('somethingNew')
   })
 })
 

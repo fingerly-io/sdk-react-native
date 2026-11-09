@@ -17,11 +17,9 @@ import { load } from '@fingerly/react-native'
 
 // consent: only once you have consent (or another lawful basis)
 const fingerly = await load({ apiKey: 'fly_pk_production_…', consent: 'granted' })
-const { requestId, visitorId, suspectScore, verdicts } = await fingerly.identify({ tag: 'checkout' })
+const { requestId, visitorId, suspectScore, suspectLevel, triggers } = await fingerly.identify({ tag: 'checkout' })
 
-if (verdicts.jailbreak.value && verdicts.jailbreak.confidence === 'high') {
-  // step up to a challenge, hold for review, add friction
-}
+// Send requestId to your backend and make the decision there.
 ```
 
 The key is a **publishable** SDK key from the dashboard, and it is safe in a
@@ -29,15 +27,20 @@ shipped bundle — it is scoped to the app identifiers you list. A **secret** ke
 is refused when it arrives from a client, so pasting one in does not work by
 design.
 
-`identify()` collects, scores on the device, and submits. It resolves with the
-server's verdict — `visitorId`, `suspectScore`, `suspectLevel` and the triggers
-behind them — so there is no second call to make. Send the `requestId` and
+`identify()` collects and submits. It resolves with what the server said —
+`visitorId`, `suspectScore`, `suspectLevel` and the triggers behind them — so
+there is no second call to make. Each trigger names the signal and its group,
+and nothing else; your weights stay on the server, and your backend reads the
+rest of the event by `requestId`. `visitorConfidence`, `visitorIsNew`,
+`identifiable` and `duplicate` can be `null` when the server did not say, which
+is not the same as `0` or `false`. Send the `requestId` and
 `visitorId` to your own backend with the request they belong to, and let your
 backend decide: **the score in your hand came from a device you do not
 control**, and an app that branches on it locally is an app whose branch can be
 patched out.
 
-Pass `{ submit: false }` to collect and score without sending anything.
+Pass `{ submit: false }` to collect without sending anything. It resolves with
+`{ report }`, the raw report and nothing else.
 
 Pass `{ automatic: true }` for a call your app makes on its own rather than in
 answer to the user: on start, on a timer, on returning to the foreground. It
@@ -134,53 +137,13 @@ So a package that collected what it *could* reach from JavaScript would report a
 jailbroken, instrumented device as clean — which is worse than reporting
 nothing, because a customer would believe it.
 
-This package calls the native SDK and hands back what it produced. The detection
+This package calls the native SDK and hands back what it produced. The collection
 logic lives in one place per platform, in Swift and in Kotlin, and improving it
 improves React Native, Flutter, Lynx and native apps at the same time rather
-than four times over.
+than four times over. What the signals mean is decided on the server.
 
 If the native module is missing, `load()` throws and says so. It does not
 degrade to a JavaScript-only mode, for the reason above.
-
-## The verdicts
-
-The same objects the native SDKs return, with the platform-specific members
-present on the platform that can answer them:
-
-```ts
-interface NativeVerdicts {
-  instrumentation: Verdict  // Frida, Substrate, Substitute, ElleKit
-  mitm: Verdict             // something intercepting the app's TLS
-  automation: Verdict       // a debugger or a UI-test runner driving it
-  tampering: Verdict        // hooked functions, injected images
-  farm: Verdict             // mass-provisioned or reset-fresh
-}
-
-interface IosVerdicts extends NativeVerdicts {
-  jailbreak: Verdict
-  simulator: Verdict
-}
-
-interface AndroidVerdicts extends NativeVerdicts {
-  root: Verdict
-  emulator: Verdict
-  appCloner: Verdict
-}
-```
-
-Each carries `value`, `confidence` and `reasons` — strongest first:
-
-```ts
-if (verdicts.instrumentation.value) {
-  console.warn(verdicts.instrumentation.reasons)
-  // → ['instrumentation-image-libhooker.dylib', 'instrumentation-thread-gum-js-loop']
-}
-```
-
-These are advice. The same rules run again on the server, over the stored
-report, where they can improve without every customer shipping an app update —
-which on mobile is the difference between a fix landing this week and landing
-over the next eighteen months. **The decision belongs on your server.**
 
 ## The platform string
 

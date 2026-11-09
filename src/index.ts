@@ -14,9 +14,11 @@
  * nothing, because a customer would believe it. This package calls the native
  * SDK and hands back what it produced.
  *
- * The consequence worth stating: the detection logic lives in one place per
+ * The consequence worth stating: the collection logic lives in one place per
  * platform, in Swift and in Kotlin, and improving it improves React Native,
- * Flutter and native apps at the same time rather than three times over.
+ * Flutter and native apps at the same time rather than three times over. What
+ * the signals mean is decided on the server, and nothing here reaches a
+ * conclusion of its own.
  *
  * ```ts
  * import { load } from '@fingerly/react-native'
@@ -24,11 +26,9 @@
  * const fingerly = await load({ apiKey: 'fly_pk_production_…' })
  * // From the consent tool, once the user has agreed (or another lawful basis applies).
  * fingerly.setConsent('granted')
- * const { requestId, verdicts } = await fingerly.identify({ tag: 'checkout' })
+ * const { requestId } = await fingerly.identify({ tag: 'checkout' })
  *
- * if (verdicts.jailbreak.value && verdicts.jailbreak.confidence === 'high') {
- *   // step up to a challenge
- * }
+ * // Send requestId to your backend and make the decision there.
  * ```
  */
 
@@ -37,11 +37,9 @@ import { NativeModules, Platform } from 'react-native'
 import type {
   MobileFingerlyOptions,
   MobileIdentifyOptions,
-  MobileVerdicts,
   NativeIdentifyResult,
   SdkPlatform,
   SignalReport,
-  Verdict,
 } from '@fingerly/types'
 
 /**
@@ -125,6 +123,14 @@ export interface IdentifyOptions extends MobileIdentifyOptions {
    * Android SDK supports it.
    */
   automatic?: boolean
+}
+
+/**
+ * What `identify({ submit: false })` resolves with. Nothing was sent, so nobody
+ * answered, and the raw report is all there is.
+ */
+export interface RawReportResult {
+  report: SignalReport
 }
 
 /** A native or transport failure surfaced consistently on both platforms. */
@@ -310,40 +316,64 @@ function parseNative(raw: string): Record<string, unknown> {
   return parsed as Record<string, unknown>
 }
 
-/**
- * A verdict with nothing behind it.
- *
- * The convention the whole codebase uses for "this could not be asked": false,
- * with an empty `reasons`. Distinct from a verdict of false, which has reasons.
- */
-const UNKNOWN_VERDICT: Verdict = { value: false, confidence: 'low', reasons: [] }
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
 
-/**
- * Fill in the verdicts this platform's SDK does not produce.
- *
- * The iOS SDK emits `jailbreak` and `simulator` and knows nothing of `root`;
- * Android is the mirror image. `MobileVerdicts` declares all of them, so the
- * type would be a lie if this did not make it true — and a lie of exactly the
- * worst kind, because `verdicts.root.value` would throw on iOS at runtime while
- * typechecking cleanly.
- *
- * Filling rather than narrowing is the trade [[MobileVerdicts]] documents: the
- * absent members come back as [[UNKNOWN_VERDICT]], which is the same thing
- * every detector in this codebase returns when its inputs are missing.
- */
-function normalizeVerdicts(raw: Partial<MobileVerdicts> | undefined): MobileVerdicts {
-  return {
-    instrumentation: raw?.instrumentation ?? UNKNOWN_VERDICT,
-    mitm: raw?.mitm ?? UNKNOWN_VERDICT,
-    automation: raw?.automation ?? UNKNOWN_VERDICT,
-    tampering: raw?.tampering ?? UNKNOWN_VERDICT,
-    farm: raw?.farm ?? UNKNOWN_VERDICT,
-    jailbreak: raw?.jailbreak ?? UNKNOWN_VERDICT,
-    simulator: raw?.simulator ?? UNKNOWN_VERDICT,
-    root: raw?.root ?? UNKNOWN_VERDICT,
-    emulator: raw?.emulator ?? UNKNOWN_VERDICT,
-    appCloner: raw?.appCloner ?? UNKNOWN_VERDICT,
+// Named rather than spread, so what reaches the app is what the server said and
+// nothing else: a customer's weight or a conclusion from an older native build
+// is left behind here even if the native side still sends one.
+const SERVER_FIELDS = [
+  'requestId',
+  'visitorId',
+  'visitorIsNew',
+  'visitorConfidence',
+  'identifiable',
+  'duplicate',
+  'state',
+  'reason',
+  'suspectScore',
+  'suspectLevel',
+  'report',
+] as const
+
+const TRIGGER_FIELDS = ['signal', 'group', 'confidence', 'reason'] as const
+
+function pick(source: Record<string, unknown>, fields: readonly string[]): Record<string, unknown> {
+  const picked: Record<string, unknown> = {}
+  for (const field of fields) {
+    // An explicit null survives: an unscored check is null, not absent and not 0.
+    if (source[field] !== undefined) picked[field] = source[field]
   }
+  return picked
+}
+
+// iOS leaves a nil out of the JSON and Android writes null. The types promise
+// null, so an answer the server did not give reads the same on both platforms:
+// never undefined, and never an invented 0 or false.
+const NULLABLE_FIELDS = [
+  'visitorIsNew',
+  'visitorConfidence',
+  'identifiable',
+  'duplicate',
+  'suspectScore',
+  'suspectLevel',
+] as const
+
+function serverAnswer(parsed: Record<string, unknown>): NativeIdentifyResult {
+  const triggers = Array.isArray(parsed.triggers)
+    ? parsed.triggers.filter(isRecord).map((trigger) => pick(trigger, TRIGGER_FIELDS))
+    : []
+  const answer = pick(parsed, SERVER_FIELDS)
+  for (const field of NULLABLE_FIELDS) {
+    if (answer[field] === undefined) answer[field] = null
+  }
+  return { ...answer, triggers } as unknown as NativeIdentifyResult
+}
+
+function rawReport(parsed: Record<string, unknown>): RawReportResult {
+  if (!isRecord(parsed.report)) throw new FingerlyError('The SDK produced an unreadable report')
+  return { report: parsed.report as unknown as SignalReport }
 }
 
 export class FingerlyClient {
@@ -379,9 +409,9 @@ export class FingerlyClient {
   }
 
   /**
-   * Collect, score locally, and submit.
+   * Collect and submit.
    *
-   * Returns the server's verdict, not a receipt for one. There is no second
+   * Returns the server's answer, not a receipt for one. There is no second
    * call to make: the address lookup and the scoring happen on the request, so
    * `suspectScore` and `visitorId` are populated by the time this resolves.
    *
@@ -389,18 +419,23 @@ export class FingerlyClient {
    * submission. The two are different answers — `0` means "scored, nothing
    * fired" — and the native bridges send an explicit null to keep them apart.
    *
+   * With `submit: false` nothing is sent and only the raw report comes back.
+   *
    * Rejects with a [[ConsentError]] while consent is not `granted`.
    */
-  async identify(options: IdentifyOptions = {}): Promise<NativeIdentifyResult> {
+  identify(options: IdentifyOptions & { submit: false }): Promise<RawReportResult>
+  identify(options?: IdentifyOptions & { submit?: true }): Promise<NativeIdentifyResult>
+  identify(options: IdentifyOptions): Promise<NativeIdentifyResult | RawReportResult>
+  async identify(options: IdentifyOptions = {}): Promise<NativeIdentifyResult | RawReportResult> {
     const native = nativeModule()
     if (!native) throw new FingerlyError(MISSING_NATIVE_MODULE)
 
     const raw = await invokeNative(() =>
       native.identify(options.tag ?? null, options.submit !== false, options.automatic === true),
     )
-    const parsed = parseNative(raw) as unknown as NativeIdentifyResult
+    const parsed = parseNative(raw)
 
-    return { ...parsed, verdicts: normalizeVerdicts(parsed.verdicts) }
+    return options.submit === false ? rawReport(parsed) : serverAnswer(parsed)
   }
 
   /**
@@ -489,18 +524,12 @@ export function nativeVersion(): string | undefined {
 // same types the browser SDK returns, from the same package — which is the
 // point of the report envelope being shared.
 export type {
-  AndroidVerdicts,
-  Confidence,
   IdentifyTrigger,
   IntegrityReport,
-  IosVerdicts,
   Lie,
-  MobileVerdicts,
   NativeIdentifyResult,
-  NativeVerdicts,
   SdkPlatform,
   SignalOutcome,
   SignalReport,
   SignalStatus,
-  Verdict,
 } from '@fingerly/types'
