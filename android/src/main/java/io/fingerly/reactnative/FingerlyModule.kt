@@ -1,5 +1,6 @@
 package io.fingerly.reactnative
 
+import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -119,6 +120,15 @@ class FingerlyModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
 
         override fun onError(code: String, message: String) {
             promise.reject(code, message)
+        }
+
+        override fun onError(code: String, message: String, retryAfterMs: Long?) {
+            if (retryAfterMs == null) {
+                onError(code, message)
+                return
+            }
+            // `userInfo.retryAfterMs` is where the JS side reads it, on both platforms.
+            promise.reject(code, message, Arguments.createMap().apply { putDouble("retryAfterMs", retryAfterMs.toDouble()) })
         }
     }
 
