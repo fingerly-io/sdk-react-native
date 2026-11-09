@@ -4,3 +4,4 @@ dist/
 android/.gradle/
 android/build/
 ios/Pods/
+Frameworks/

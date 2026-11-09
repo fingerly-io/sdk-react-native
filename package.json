@@ -1,11 +1,11 @@
 {
   "name": "@fingerly/react-native",
   "version": "0.1.0",
-  "private": true,
+  "publishConfig": { "access": "public" },
   "packageManager": "pnpm@9.0.0",
   "description": "React Native SDK — a bridge to the native iOS and Android SDKs, which do the collecting",
   "license": "Apache-2.0",
-  "repository": {"type": "git", "url": "https://github.com/fingerly-io/sdk-react-native.git"},
+  "repository": {"type": "git", "url": "https://github.com/fingerly-io/sdks.git", "directory": "client/mobile/react-native"},
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -17,7 +17,7 @@
       "require": "./dist/index.cjs"
     }
   },
-  "files": ["dist", "ios", "android", "fingerly-react-native.podspec"],
+  "files": ["dist", "ios", "android", "!android/build", "!android/.gradle", "!ios/Pods", "fingerly-react-native.podspec"],
   "sideEffects": false,
   "dependencies": {
     "@fingerly/types": "workspace:*"

@@ -219,8 +219,7 @@ Answer it with `setConsent`, not a retry. See [Consent](#consent).
 Both platforms are implemented, compiled, and exercised through a React Native
 0.87 New Architecture host. `ios/FingerlyModule.swift` calls the
 [iOS SDK](https://github.com/fingerly-io/sdk-ios) and
-`android/…/FingerlyModule.kt` calls the
-[Android SDK](https://github.com/fingerly-io/sdk-android); each is a few dozen
+`android/…/FingerlyModule.kt` calls the Android SDK (`io.fingerly:fingerly`); each is a few dozen
 lines of forwarding to that SDK's `FingerlyBridge`, with no logic of its own by
 design.
 
@@ -231,26 +230,15 @@ API 36 Pixel 8 emulator: all 22 sources completed in 489ms cold and 61ms warm,
 with 104ms and 3ms of bridge overhead respectively. Both returned native SDK
 version `0.1.0` and the complete report through Hermes.
 
-The native SDKs are not published yet. For an iOS development build, run
-`scripts/build-xcframework.sh` in the iOS checkout, unzip
-`build/Fingerly-0.1.0.xcframework.zip` beside `Fingerly.podspec`, and point the
-host application's Podfile at that checkout:
-
-```ruby
-pod 'Fingerly', :path => '/path/to/sdks/mobile/ios'
-```
+On iOS, `pod install` downloads the matching `Fingerly.xcframework` from
+`https://maven.fingerly.io/ios/` and verifies its checksum, so the Podfile needs
+no entry for the native SDK. The same binary is published as a Swift package at
+[sdk-ios](https://github.com/fingerly-io/sdk-ios).
 
 The Android module depends on `io.fingerly:fingerly:0.1.0` from Fingerly's Maven
 repository, `https://maven.fingerly.io`, which the bridge adds to the build
-itself, so the host app needs no repository override. That repository is not
-live yet. Until it is, and for contributors at any time, build the SDK's AAR
-into your local Maven repository:
-
-```
-cd ../android && ./gradlew :fingerly:publishToMavenLocal
-```
-
-The bridge checks Maven Local before Fingerly's repository.
+itself, so the host app needs no repository override. The bridge checks Maven
+Local before Fingerly's repository.
 
 This bridge is licensed under Apache-2.0. The native SDK it depends on is a
 closed binary under the Fingerly SDK License.
