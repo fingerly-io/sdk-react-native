@@ -194,8 +194,35 @@ describe('identify', () => {
     expect(result.state).toBe('scored')
     expect(result.suspectScore).toBe(41)
     expect(result.suspectLevel).toBe('medium')
-    expect(result.triggers).toHaveLength(1)
-    expect(result.triggers[0]?.signal).toBe('patched-natives')
+    expect(result).not.toHaveProperty('triggers')
+  })
+
+  it('carries a score from an answer that has no signals', async () => {
+    const { identify } = installNative()
+    identify.mockResolvedValue(
+      JSON.stringify({ requestId: 'req_1', visitorId: 'vis_1', suspectScore: 41, suspectLevel: 'medium', report: { schema: 1, sources: {} } }),
+    )
+    const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
+    const result = await fingerly.identify()
+
+    expect(result.suspectScore).toBe(41)
+    expect(result.suspectLevel).toBe('medium')
+    expect(result).not.toHaveProperty('triggers')
+  })
+
+  it('reads an answer with neither score nor signals, the same as a hidden score', async () => {
+    const { identify } = installNative()
+    identify.mockResolvedValue(
+      JSON.stringify({ requestId: 'req_1', visitorId: 'vis_1', state: 'scored', report: { schema: 1, sources: {} } }),
+    )
+    const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
+    const result = await fingerly.identify()
+
+    expect(result.requestId).toBe('req_1')
+    expect(result.visitorId).toBe('vis_1')
+    expect(result.suspectScore).toBeNull()
+    expect(result.suspectLevel).toBeNull()
+    expect(result).not.toHaveProperty('triggers')
   })
 
   it('keeps an unscored answer null rather than zero', async () => {
@@ -211,7 +238,6 @@ describe('identify', () => {
           visitorId: 'vis_1',
           suspectScore: null,
           suspectLevel: null,
-          triggers: [],
           report: { schema: 1, sources: {} },
         }),
       ),
@@ -224,7 +250,8 @@ describe('identify', () => {
 
     expect(result.suspectScore).toBeNull()
     expect(result.suspectLevel).toBeNull()
-    expect(result.triggers).toEqual([])
+    expect(result.suspectScore).not.toBe(0)
+    expect(result.suspectLevel).not.toBe('')
   })
 
   it.each([
@@ -233,7 +260,7 @@ describe('identify', () => {
   ])('reads an answer the server did not give as null: %s', async (_label, unsaid) => {
     const { identify } = installNative()
     identify.mockResolvedValue(
-      JSON.stringify({ requestId: 'req_dup', visitorId: '', state: 'scored', triggers: [], report: { schema: 1, sources: {} }, ...unsaid }),
+      JSON.stringify({ requestId: 'req_dup', visitorId: '', state: 'scored', report: { schema: 1, sources: {} }, ...unsaid }),
     )
     const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
     const result = await fingerly.identify()
@@ -246,7 +273,7 @@ describe('identify', () => {
   it('keeps a duplicate answer true with its visitor fields empty', async () => {
     const { identify } = installNative()
     identify.mockResolvedValue(
-      JSON.stringify({ requestId: 'req_dup', visitorId: '', duplicate: true, state: 'scored', triggers: [], report: { schema: 1, sources: {} } }),
+      JSON.stringify({ requestId: 'req_dup', visitorId: '', duplicate: true, state: 'scored', report: { schema: 1, sources: {} } }),
     )
     const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
     const result = await fingerly.identify()
@@ -256,14 +283,14 @@ describe('identify', () => {
     expect(result.visitorConfidence).toBeNull()
   })
 
-  it('never hands the app a weight, even when the native side still sends one', async () => {
+  it('never hands the app a signal name or weight, even when the native side still sends them', async () => {
+    // installNative answers like an older native build, with a trigger in it.
     installNative()
     const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
     const result = await fingerly.identify()
 
-    expect(result.triggers).toEqual([
-      { signal: 'patched-natives', group: 'automation', confidence: 'high', reason: '' },
-    ])
+    expect(result).not.toHaveProperty('triggers')
+    expect(JSON.stringify(result)).not.toContain('patched-natives')
     expect(JSON.stringify(result)).not.toContain('weight')
   })
 
@@ -277,34 +304,27 @@ describe('identify', () => {
   })
 
   it.each([
-    ['missing', undefined],
     ['null', null],
     ['not a list', 'frida'],
     ['an object', { signal: 'frida' }],
-  ])('reads triggers that are %s as none', async (_label, triggers) => {
-    NativeModules.Fingerly = {
-      configure: vi.fn(),
-      identify: vi.fn(async () => JSON.stringify({ requestId: 'req_1', triggers, report: { schema: 1, sources: {} } })),
-      collect: vi.fn(),
-      sdkVersion: '0.1.0',
-    }
-    const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
-
-    await expect(fingerly.identify()).resolves.toMatchObject({ requestId: 'req_1', triggers: [] })
-  })
-
-  it('drops trigger entries that are not objects and keeps the rest', async () => {
+    ['a list of anything', ['frida', null, 3, ['x'], { signal: 'frida', weight: 9 }]],
+  ])('ignores stale triggers that are %s, and any unknown member', async (_label, triggers) => {
     NativeModules.Fingerly = {
       configure: vi.fn(),
       identify: vi.fn(async () =>
-        JSON.stringify({ triggers: ['frida', null, 3, ['x'], { signal: 'frida', weight: 9 }], report: {} }),
+        JSON.stringify({ requestId: 'req_1', suspectScore: 12, triggers, futureMember: { nested: true }, report: { schema: 1, sources: {} } }),
       ),
       collect: vi.fn(),
       sdkVersion: '0.1.0',
     }
     const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
+    const result = await fingerly.identify()
 
-    expect((await fingerly.identify()).triggers).toEqual([{ signal: 'frida' }])
+    expect(result.requestId).toBe('req_1')
+    expect(result.suspectScore).toBe(12)
+    expect(result).not.toHaveProperty('triggers')
+    expect(result).not.toHaveProperty('futureMember')
+    expect(JSON.stringify(result)).not.toContain('frida')
   })
 
   it('returns only the raw report for submit: false', async () => {
