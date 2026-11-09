@@ -45,10 +45,11 @@ rootProject.allprojects {
     repositories {
         google()
         mavenCentral()
-        // Used by contributors until io.fingerly:fingerly is published. Maven
-        // Central remains ahead of it, so released applications resolve the
-        // published artifact once it exists.
+        // Ahead of Fingerly's own repository, so that a contributor's local
+        // build is found without that host having to answer.
         mavenLocal()
+        // Where the native SDK, io.fingerly:fingerly, comes from.
+        maven { url 'https://maven.fingerly.io' }
     }
 }
 
@@ -59,12 +60,12 @@ dependencies {
 
     // The SDK that does the collecting.
     //
-    // Not published yet — see the note in the package README. Until it is,
-    // publish the native SDK to Maven Local (`./gradlew
-    // :fingerly:publishToMavenLocal` in sdk-android), which the repositories
-    // above check after Maven Central. A composite build (`includeBuild` with
-    // a dependency substitution) does not work with current React Native
-    // apps: they build with AGP 9 while the native SDK builds with AGP 8, and
-    // Gradle refuses two AGP versions in one build.
+    // Resolved from Fingerly's own Maven repository, declared above; see the
+    // note in the package README. Contributors can instead publish the native
+    // SDK to Maven Local (`./gradlew :fingerly:publishToMavenLocal` in
+    // sdk-android), which the repositories above check first. A composite
+    // build (`includeBuild` with a dependency substitution) does not work with
+    // current React Native apps: they build with AGP 9 while the native SDK
+    // builds with AGP 8, and Gradle refuses two AGP versions in one build.
     implementation 'io.fingerly:fingerly:0.1.0'
 }

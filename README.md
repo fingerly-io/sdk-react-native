@@ -264,22 +264,29 @@ API 36 Pixel 8 emulator: all 22 sources completed in 489ms cold and 61ms warm,
 with 104ms and 3ms of bridge overhead respectively. Both returned native SDK
 version `0.1.0` and the complete report through Hermes.
 
-The native SDKs are not published yet. For an iOS development build, point the
-host application's Podfile at the sibling checkout:
+The native SDKs are not published yet. For an iOS development build, run
+`scripts/build-xcframework.sh` in the iOS checkout, unzip
+`build/Fingerly-0.1.0.xcframework.zip` beside `Fingerly.podspec`, and point the
+host application's Podfile at that checkout:
 
 ```ruby
 pod 'Fingerly', :path => '/path/to/sdks/mobile/ios'
 ```
 
-The Android module depends on `io.fingerly:fingerly:0.1.0`, which is not published
-yet. Until it is, build the SDK's AAR into your local Maven repository:
+The Android module depends on `io.fingerly:fingerly:0.1.0` from Fingerly's Maven
+repository, `https://maven.fingerly.io`, which the bridge adds to the build
+itself, so the host app needs no repository override. That repository is not
+live yet. Until it is, and for contributors at any time, build the SDK's AAR
+into your local Maven repository:
 
 ```
 cd ../android && ./gradlew :fingerly:publishToMavenLocal
 ```
 
-The bridge checks Maven Central first and Maven Local second, so the host app
-does not need its own repository override for this contributor workflow.
+The bridge checks Maven Local before Fingerly's repository.
+
+This bridge is licensed under Apache-2.0. The native SDK it depends on is a
+closed binary under the Fingerly SDK License.
 
 ## Development
 
