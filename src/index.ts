@@ -321,8 +321,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 // Named rather than spread, so what reaches the app is what the server said and
-// nothing else: a signal name or a conclusion from an older native build is
-// left behind here even if the native side still sends one.
+// nothing else: a signal name, a conclusion or an unscored reason in the native
+// JSON is left behind here.
 const SERVER_FIELDS = [
   'requestId',
   'visitorId',
@@ -331,7 +331,6 @@ const SERVER_FIELDS = [
   'identifiable',
   'duplicate',
   'state',
-  'reason',
   'suspectScore',
   'suspectLevel',
   'report',

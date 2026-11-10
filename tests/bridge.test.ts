@@ -454,18 +454,25 @@ describe('unreadable native answers', () => {
     }
   })
 
-  it('tolerates a result without reason and with members it does not know', async () => {
+  it('passes on only what the server tells an app', async () => {
     NativeModules.Fingerly = {
       configure: vi.fn(),
       identify: vi.fn(async () =>
-        JSON.stringify({ requestId: 'req_1', report: { schema: 1, sources: {} }, somethingNew: { a: 1 } }),
+        JSON.stringify({
+          requestId: 'req_1',
+          state: 'unavailable',
+          reason: 'ip-database-not-loaded',
+          report: { schema: 1, sources: {} },
+          somethingNew: { a: 1 },
+        }),
       ),
       collect: vi.fn(),
       sdkVersion: '0.1.0',
     }
     const result = await (await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })).identify()
     expect(result.requestId).toBe('req_1')
-    expect(result.reason).toBeUndefined()
+    expect(result.state).toBe('unavailable')
+    expect(result).not.toHaveProperty('reason')
     expect(result).not.toHaveProperty('somethingNew')
   })
 })
