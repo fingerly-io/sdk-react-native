@@ -240,6 +240,26 @@ repository, `https://maven.fingerly.io`, which the bridge adds to the build
 itself, so the host app needs no repository override. The bridge checks Maven
 Local before Fingerly's repository.
 
+**Installed-app checks are opt-in on Android.** From the Android SDK release
+after 0.1.0, the checks for root managers, hooking frameworks and app cloners by
+package name ship in a separate artifact, `io.fingerly:fingerly-app-checks`,
+because Google Play treats the list of installed apps as personal and sensitive
+data. This bridge depends on `io.fingerly:fingerly` only. If your app can
+justify the package visibility in its Play review and wants these checks, add
+the artifact to your app's Android module, at the same version as
+`io.fingerly:fingerly`, and declare "App activity: Installed apps" in the Data
+safety form:
+
+```groovy
+dependencies {
+    implementation 'io.fingerly:fingerly-app-checks:<same version as io.fingerly:fingerly>'
+}
+```
+
+Without it, the report carries no installed-app fields and nothing about other
+apps leaves the device; whether the app itself runs inside a cloner is still
+reported.
+
 This bridge is licensed under Apache-2.0. The native SDK it depends on is a
 closed binary under the Fingerly SDK License.
 
