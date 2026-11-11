@@ -104,7 +104,7 @@ describe('the platform name', () => {
     const { configure } = installNative()
     await load({ apiKey: 'fly_pk_development_test' })
 
-    expect(configure).toHaveBeenCalledWith('fly_pk_development_test', '', 'react-native-android', 'pending')
+    expect(configure).toHaveBeenCalledWith('fly_pk_development_test', '', 'react-native-android', 'pending', 0)
   })
 
   it('never reports the bare toolkit, which the server scores as a browser', async () => {
@@ -118,6 +118,35 @@ describe('the platform name', () => {
       // back to the web profile when it finds neither.
       expect(platform === 'react-native' || platform === 'flutter').toBe(false)
       expect(/ios|android/.test(platform)).toBe(true)
+    }
+  })
+})
+
+describe('Play Integrity', () => {
+  it('hands the project number to the Android module', async () => {
+    Platform.OS = 'android'
+    const { configure } = installNative()
+    await load({ apiKey: 'fly_pk_development_test', playIntegrityCloudProjectNumber: 123456789012 })
+
+    expect(configure).toHaveBeenCalledWith('fly_pk_development_test', '', 'react-native-android', 'pending', 123456789012)
+  })
+
+  it('keeps the iOS call at four arguments, which the iOS module requires', async () => {
+    Platform.OS = 'ios'
+    const { configure } = installNative()
+    await load({ apiKey: 'fly_pk_development_test', playIntegrityCloudProjectNumber: 123456789012 })
+
+    expect(configure.mock.calls[0]).toEqual(['fly_pk_development_test', '', 'react-native-ios', 'pending'])
+  })
+
+  it('refuses a value that is not a project number before configuring anything', async () => {
+    Platform.OS = 'android'
+    for (const bad of [0, -5, 1.5, Number.NaN, '123456789012']) {
+      const { configure } = installNative()
+      await expect(
+        load({ apiKey: 'fly_pk_development_test', playIntegrityCloudProjectNumber: bad as number }),
+      ).rejects.toThrow(TypeError)
+      expect(configure).not.toHaveBeenCalled()
     }
   })
 })
