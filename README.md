@@ -235,7 +235,7 @@ On iOS, `pod install` downloads the matching `Fingerly.xcframework` from
 no entry for the native SDK. The same binary is published as a Swift package at
 [sdk-ios](https://github.com/fingerly-io/sdk-ios).
 
-The Android module depends on `io.fingerly:fingerly:0.1.0` from Fingerly's Maven
+The Android module depends on `io.fingerly:fingerly:0.2.0` from Fingerly's Maven
 repository, `https://maven.fingerly.io`, which the bridge adds to the build
 itself, so the host app needs no repository override. The bridge checks Maven
 Local before Fingerly's repository.

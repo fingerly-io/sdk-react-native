@@ -67,5 +67,5 @@ dependencies {
     // build (`includeBuild` with a dependency substitution) does not work with
     // current React Native apps: they build with AGP 9 while the native SDK
     // builds with AGP 8, and Gradle refuses two AGP versions in one build.
-    implementation 'io.fingerly:fingerly:0.1.0'
+    implementation 'io.fingerly:fingerly:0.2.0'
 }
