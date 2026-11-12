@@ -47,15 +47,35 @@ class FingerlyModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
     override fun getConstants(): Map<String, Any> =
         mapOf("sdkVersion" to FingerlyBridge.sdkVersion())
 
+    /**
+     * `playIntegrityCloudProjectNumber` is the app's Google Cloud project
+     * number for Play Integrity, 0 for none: a JavaScript number, so a double
+     * here. It takes effect only when the app also depends on the optional
+     * `io.fingerly:fingerly-play-integrity` artifact, which the native SDK
+     * finds on its own; without it the number is ignored.
+     */
     @ReactMethod
-    fun configure(apiKey: String, endpoint: String, platform: String, consent: String) {
+    fun configure(
+        apiKey: String,
+        endpoint: String,
+        platform: String,
+        consent: String,
+        playIntegrityCloudProjectNumber: Double,
+    ) {
         // The React context rather than the Activity. An SDK holding an
         // Activity would keep a destroyed screen alive for as long as the
         // client lives, and this one is deliberately long-lived.
         //
         // `consent` is always sent by `src/index.ts`, `pending` when the app
         // passed none, so the state is set rather than left as it was.
-        FingerlyBridge.configure(reactApplicationContext, apiKey, endpoint, platform, consent)
+        FingerlyBridge.configure(
+            reactApplicationContext,
+            apiKey,
+            endpoint,
+            platform,
+            consent,
+            playIntegrityCloudProjectNumber.toLong(),
+        )
     }
 
     /** Applies to the configured client and to any call it has in flight. */

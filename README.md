@@ -240,6 +240,54 @@ repository, `https://maven.fingerly.io`, which the bridge adds to the build
 itself, so the host app needs no repository override. The bridge checks Maven
 Local before Fingerly's repository.
 
+**Installed-app checks are opt-in on Android.** From the Android SDK release
+after 0.1.0, the checks for root managers, hooking frameworks and app cloners by
+package name ship in a separate artifact, `io.fingerly:fingerly-app-checks`,
+because Google Play treats the list of installed apps as personal and sensitive
+data. This bridge depends on `io.fingerly:fingerly` only. If your app can
+justify the package visibility in its Play review and wants these checks, add
+the artifact to your app's Android module, at the same version as
+`io.fingerly:fingerly`, and declare "App activity: Installed apps" in the Data
+safety form:
+
+```groovy
+dependencies {
+    implementation 'io.fingerly:fingerly-app-checks:<same version as io.fingerly:fingerly>'
+}
+```
+
+Without it, the report carries no installed-app fields and nothing about other
+apps leaves the device; whether the app itself runs inside a cloner is still
+reported.
+
+**Play Integrity (Android, optional).** The Android SDK has an optional
+artifact, `io.fingerly:fingerly-play-integrity` (server ADR 0026), that adds
+Google Play Integrity verdicts to events. To use it, add the artifact to the
+app and pass your Google Cloud project number, the one linked to the app in
+Play Console, to `load`:
+
+```groovy
+// android/app/build.gradle
+dependencies {
+    implementation 'io.fingerly:fingerly-play-integrity:<same version as io.fingerly:fingerly>'
+}
+```
+
+```ts
+const fingerly = await load({
+  apiKey: 'fly_pk_production_…',
+  playIntegrityCloudProjectNumber: 123456789012,
+})
+```
+
+The native SDK finds the artifact on its own; this bridge does not depend on
+it. Without the artifact the number is ignored and nothing fails, and on iOS it
+is ignored. The rest of the setup (the service account uploaded to your
+Fingerly project, the daily budget) is in the Android SDK's
+`fingerly-play-integrity/README.md`. This needs the Android SDK
+release after 0.1.0, the first whose `FingerlyBridge.configure` takes a project
+number; Gradle refuses to pair the artifact with a core of another version.
+
 This bridge is licensed under Apache-2.0. The native SDK it depends on is a
 closed binary under the Fingerly SDK License.
 
