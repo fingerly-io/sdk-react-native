@@ -522,11 +522,13 @@ describe('v3 TypeScript contract re-exports', () => {
     const signals = [
       'attestation_failed',
       'attestation_missing',
+      'attestation_downgrade',
       'app_attest_key_churn',
       'play_device_integrity_failed',
       'play_app_unrecognized',
       'device_inconsistent',
       'report_incomplete',
+      'probe_errors',
       'tampering',
       'custom_root_ca',
       'secondary_user_profile',
