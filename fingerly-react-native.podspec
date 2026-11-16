@@ -24,7 +24,8 @@ package = JSON.parse(File.read(File.join(__dir__, 'package.json')))
 binary = JSON.parse(File.read(File.join(__dir__, 'ios', 'fingerly-binary.json')))
 
 unless system('bash', File.join(__dir__, 'ios', 'fetch-fingerly-xcframework.sh'),
-              binary['version'], binary['sha256'].to_s, __dir__, binary['url'].to_s)
+              binary['version'], binary['sha256'].to_s, __dir__, binary['url'].to_s,
+              binary['team_id'].to_s)
   raise "Could not fetch Fingerly.xcframework #{binary['version']}. See the message above."
 end
 

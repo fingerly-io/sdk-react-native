@@ -3,7 +3,11 @@
 # Puts Fingerly.xcframework in <pod root>/Frameworks. Run by the podspec or
 # standalone during local staging.
 #
-#   fetch-fingerly-xcframework.sh [<version> <sha256> <pod root> [<url>]]
+#   fetch-fingerly-xcframework.sh [<version> <sha256> <pod root> [<url> [<team id>]]]
+#
+# A download is installed only when it matches the pinned checksum and is
+# signed by the pinned Apple team (`sha256` and `team_id` in
+# fingerly-binary.json).
 #
 # When FINGERLY_XCFRAMEWORK_PATH is set (pointing either to a .xcframework
 # directory or a .xcframework.zip archive), copies or extracts it directly into
@@ -27,6 +31,7 @@ version="${1:-$(json_field version)}"
 sha256="${2-$(json_field sha256)}"
 pod_root="${3:-$default_root}"
 url="${4:-$(json_field url)}"
+team_id="${5-$(json_field team_id)}"
 
 if [ -z "$version" ]; then
   echo "error: no Fingerly version supplied or found in $binary_json" >&2
@@ -73,7 +78,7 @@ if [ -n "${FINGERLY_XCFRAMEWORK_PATH:-}" ]; then
   fi
 fi
 
-wanted="$version $sha256"
+wanted="$version $sha256 $team_id"
 
 # A download is only ever installed against a pinned checksum. An empty one is
 # a broken package, not a reason to install whatever the host serves.
@@ -81,8 +86,36 @@ if ! printf '%s' "$sha256" | grep -qE '^[0-9a-f]{64}$'; then
   echo "error: no valid checksum recorded for $url; refusing to install an unverified binary" >&2
   exit 1
 fi
+if ! printf '%s' "$team_id" | grep -qE '^[A-Z0-9]{10}$'; then
+  echo "error: no valid Apple team identifier recorded for $url; refusing to install an unverified binary" >&2
+  exit 1
+fi
 
-if [ -d "$dest/Fingerly.xcframework" ] && [ "$(cat "$stamp" 2>/dev/null)" = "$wanted" ]; then
+# Refuses any framework that is not signed by the pinned Apple team: it needs a
+# valid signature under an Apple-issued certificate whose leaf names the team,
+# on the XCFramework and on every slice, and the signature must record the
+# same team. Unsigned, ad hoc, altered and other-team binaries all fail.
+verify_signature() {
+  local framework="$1" requirement code signer out
+  requirement="anchor apple generic and certificate leaf[subject.OU] = \"$team_id\""
+  for code in "$framework" "$framework"/*/Fingerly.framework; do
+    [ -e "$code" ] || continue
+    if ! out="$(codesign --verify --strict --deep -R="$requirement" "$code" 2>&1)"; then
+      echo "error: $code is not signed by Apple team $team_id: $(printf '%s' "$out" | tr '\n' ' ')" >&2
+      return 1
+    fi
+    signer="$(codesign -dv "$code" 2>&1 | sed -n 's/^TeamIdentifier=//p')"
+    if [ "$signer" != "$team_id" ]; then
+      echo "error: $code records team ${signer:-none}, expected $team_id" >&2
+      return 1
+    fi
+  done
+}
+
+# The stamp says what was installed; the signature is checked again, so a
+# framework swapped in place of a verified one is not kept.
+if [ -d "$dest/Fingerly.xcframework" ] && [ "$(cat "$stamp" 2>/dev/null)" = "$wanted" ] \
+  && verify_signature "$dest/Fingerly.xcframework" 2>/dev/null; then
   exit 0
 fi
 
@@ -102,6 +135,7 @@ if [ ! -d "$work/expanded/Fingerly.xcframework" ]; then
   echo "error: $url does not contain Fingerly.xcframework" >&2
   exit 1
 fi
+verify_signature "$work/expanded/Fingerly.xcframework" || exit 1
 
 rm -rf "$dest"
 mkdir -p "$dest"

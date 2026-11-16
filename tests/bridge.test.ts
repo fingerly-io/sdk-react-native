@@ -890,8 +890,10 @@ describe('version, native coordinates, and bridge selector parity (0.3.0)', () =
       version: '0.3.0',
       url: 'https://maven.fingerly.io/ios/Fingerly-0.3.0.xcframework.zip',
       sha256: 'c1d582eae15243fb63e3e55e68909490060f2b8232624b1025bb931c3100b4cc',
+      team_id: 'XGXX88HRR5',
     })
     expect(fetchScript).toContain('FINGERLY_XCFRAMEWORK_PATH')
+    expect(fetchScript).toContain('anchor apple generic and certificate leaf[subject.OU]')
     expect(gradle).toContain('mavenLocal()')
     expect(gradle).toContain("implementation 'io.fingerly:fingerly:0.3.0'")
     expect(gradle).not.toMatch(/^\s*(implementation|api)\s+['"]io\.fingerly:fingerly-(app-checks|play-integrity)/m)
