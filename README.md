@@ -282,9 +282,17 @@ const fingerly = await load({
 })
 ```
 
-`FingerlyModule` automatically wires `FingerlyPlayIntegrity()` when linked.
-Without the artifact the project number is ignored and nothing fails, and on iOS
-it is safely ignored.
+`FingerlyModule` automatically wires `FingerlyPlayIntegrity()` when linked. A
+provider of your own, registered from native code with
+`FingerlyBridge.setPlayIntegrity(provider)` before `load`, is used in place of
+the artifact's. On Android, a project number with neither is a configuration
+error: the
+module keeps the previous configuration, and every `identify` and `collect`
+rejects with a `FingerlyError` ("playIntegrityCloudProjectNumber was set but the
+io.fingerly:fingerly-play-integrity artifact is not on the classpath", native
+code `play_integrity_unavailable`) until a `load` without that mismatch
+replaces it. Without a project number, Play Integrity is off and nothing fails.
+On iOS the project number is ignored.
 
 This bridge is licensed under Apache-2.0. The native SDKs it depends on are
 closed binaries under the Fingerly SDK License.

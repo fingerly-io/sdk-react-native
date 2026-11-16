@@ -48,6 +48,9 @@ class FingerlyModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
         }
     }
 
+    /** Why the last `configure` was refused, or null when it was accepted. */
+    @Volatile private var configurationError: String? = null
+
     /**
      * The name JavaScript looks the module up by.
      *
@@ -85,11 +88,24 @@ class FingerlyModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
     ) {
         val projectNumber = playIntegrityCloudProjectNumber.toLong().takeIf { it > 0L }
 
-        optionalAppChecks?.let(FingerlyBridge::setAppChecks)
-        if (projectNumber != null) {
-            optionalPlayIntegrity?.let { provider ->
-                FingerlyBridge.setPlayIntegrity(provider, projectNumber)
+        // A project number with no provider to use it would leave Play
+        // Integrity off without a word. `configure` returns nothing to
+        // JavaScript, so the configuration is refused, nothing is changed, and
+        // every later `identify` and `collect` rejects with
+        // `play_integrity_unavailable` until a complete configuration replaces it.
+        val playIntegrity = optionalPlayIntegrity
+        configurationError =
+            if (projectNumber != null && playIntegrity == null && !FingerlyBridge.hasPlayIntegrityProvider()) {
+                PLAY_INTEGRITY_UNAVAILABLE_MESSAGE
+            } else {
+                null
             }
+        if (configurationError != null) return
+
+        optionalAppChecks?.let(FingerlyBridge::setAppChecks)
+        // A Play Integrity provider the app registered by hand is kept.
+        if (projectNumber != null && playIntegrity != null && !FingerlyBridge.hasPlayIntegrityProvider()) {
+            FingerlyBridge.setPlayIntegrity(playIntegrity, projectNumber)
         }
 
         FingerlyBridge.configure(
@@ -114,12 +130,21 @@ class FingerlyModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
      */
     @ReactMethod
     fun identify(tag: String?, submit: Boolean, automatic: Boolean, promise: Promise) {
+        if (refuseUnconfigured(promise)) return
         FingerlyBridge.identify(tag, submit, automatic, settle(promise))
     }
 
     @ReactMethod
     fun collect(promise: Promise) {
+        if (refuseUnconfigured(promise)) return
         FingerlyBridge.collect(settle(promise))
+    }
+
+    /** Rejects the call with the stored configuration error, if there is one. */
+    private fun refuseUnconfigured(promise: Promise): Boolean {
+        val error = configurationError ?: return false
+        promise.reject(PLAY_INTEGRITY_UNAVAILABLE, error)
+        return true
     }
 
     /**
@@ -179,5 +204,9 @@ class FingerlyModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
 
     private companion object {
         const val DELETE_FAILED = "delete_failed"
+        const val PLAY_INTEGRITY_UNAVAILABLE = "play_integrity_unavailable"
+        const val PLAY_INTEGRITY_UNAVAILABLE_MESSAGE =
+            "playIntegrityCloudProjectNumber was set but the io.fingerly:fingerly-play-integrity " +
+                "artifact is not on the classpath"
     }
 }
