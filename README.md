@@ -49,8 +49,7 @@ Pass `{ submit: false }` to collect without sending anything. It resolves with
 Pass `{ automatic: true }` for a call your app makes on its own rather than in
 answer to the user: on start, on a timer, on returning to the foreground. It
 joins an identification already in flight instead of starting another, and
-waits out a transient failure instead of repeating it at once. On Android it
-has no effect until the native Android SDK supports it.
+waits out a transient failure instead of repeating it at once.
 
 ## Consent
 
@@ -81,7 +80,7 @@ have consent, or another lawful basis. Anything other than the three states
 throws a `TypeError` rather than being guessed at.
 
 While the state is anything but `granted`, the native SDK runs no source,
-reads and writes no keychain entry or preference for fingerprinting, and sends
+reads and writes no container storage or attestation key state, and sends
 nothing.
 `identify()` and `collect()` reject with a `ConsentError`, whose `code` is
 `'consent_required'` and whose `state` says which state refused the call:
@@ -119,13 +118,15 @@ import { deleteStoredIdentity } from '@fingerly/react-native'
 await deleteStoredIdentity()
 ```
 
-Deletes the install record the native SDK keeps on the device, including the
-install ID the server recognises it by. Call it when a user asks for their data
-to be erased or deletes their account. It needs no `load` and no consent, and
-sends nothing, and resolves once no record remains, including when there was
-none. It rejects with a `FingerlyError` when the delete fails. The next
-identification made with consent starts a new record; to stop identifying as
-well, set consent to `'denied'` first.
+Strictly for **user-initiated GDPR / privacy erasure** ("Delete My Data" or
+account deletion) — never for routine logout or session rotation. Atomically
+deletes the local `install_id` and hardware attestation key state (`Application
+Support/io.fingerly.sdk/` on iOS with `isExcludedFromBackup = true`, and the
+local install record plus persistent `AndroidKeyStore` v3 signing key on
+Android) so subsequent re-consented sessions mint an unlinked `visitorId`. It
+needs no `load` and no consent, sends nothing, and resolves once no record
+remains, including when there was none. It rejects with a `FingerlyError` when
+the delete fails. To stop identifying as well, set consent to `'denied'` first.
 
 ## This package collects nothing
 
@@ -207,8 +208,7 @@ full-jitter backoff before it ever rejects.
 
 When the server asked for a pause with `Retry-After`, the error carries it as
 `retryAfterMs`. Wait at least that long before identifying again. It is
-undefined when the response named no wait, and on Android until the native
-Android bridge passes the header on.
+undefined when the response named no wait.
 
 A call refused for want of consent rejects with `ConsentError`, a subclass of
 `FingerlyError` with `code: 'consent_required'`, a `state`, and no `status`.
@@ -235,7 +235,7 @@ On iOS, `pod install` downloads the matching `Fingerly.xcframework` from
 no entry for the native SDK. The same binary is published as a Swift package at
 [sdk-ios](https://github.com/fingerly-io/sdk-ios).
 
-The Android module depends on `io.fingerly:fingerly:0.2.0` from Fingerly's Maven
+The Android module depends on `io.fingerly:fingerly:0.3.0` from Fingerly's Maven
 repository, `https://maven.fingerly.io`, which the bridge adds to the build
 itself, so the host app needs no repository override. The bridge checks Maven
 Local before Fingerly's repository.

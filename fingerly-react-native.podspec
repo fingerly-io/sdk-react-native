@@ -24,13 +24,14 @@ package = JSON.parse(File.read(File.join(__dir__, 'package.json')))
 binary = JSON.parse(File.read(File.join(__dir__, 'ios', 'fingerly-binary.json')))
 
 unless system('bash', File.join(__dir__, 'ios', 'fetch-fingerly-xcframework.sh'),
-              binary['version'], binary['sha256'].to_s, __dir__)
+              binary['version'], binary['sha256'].to_s, __dir__, binary['url'].to_s)
   raise "Could not fetch Fingerly.xcframework #{binary['version']}. See the message above."
 end
 
 Pod::Spec.new do |s|
   s.name         = 'fingerly-react-native'
-  s.version      = package['version']
+  s.version      = '0.3.0'
+  raise "fingerly-react-native.podspec (#{s.version}) and package.json (#{package['version']}) disagree" unless s.version.to_s == package['version']
   s.summary      = package['description']
   s.license      = 'Apache-2.0'
   s.author       = { 'Fingerly' => 'support@fingerly.io' }

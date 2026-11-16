@@ -20,7 +20,8 @@
 RCT_EXTERN_METHOD(configure:(NSString *)apiKey
                   endpoint:(NSString *)endpoint
                   platform:(NSString *)platform
-                  consent:(NSString *)consent)
+                  consent:(NSString *)consent
+                  playIntegrityCloudProjectNumber:(nonnull NSNumber *)playIntegrityCloudProjectNumber)
 
 RCT_EXTERN_METHOD(setConsent:(NSString *)state)
 
