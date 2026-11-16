@@ -566,13 +566,10 @@ export function nativeVersion(): string | undefined {
 }
 
 // Re-exported from `@fingerly/types` (`v: 3` contract) so an app that only
-// installs `@fingerly/react-native` can name the result, risk signal, and
-// stored event shapes directly.
+// installs `@fingerly/react-native` can name the result and risk signal
+// shapes directly.
 export type {
   Confidence,
-  FingerlyEvent,
-  FingerlyMobileEvent,
-  FingerlyWebEvent,
   IdentifyResult,
   IdentifySubmission,
   IdentifyTrigger,
