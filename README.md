@@ -1,69 +1,92 @@
-# @fingerly/react-native
+<p align="center">
+  <a href="https://fingerly.io">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/fingerly-io/.github/main/assets/logo-dark.svg">
+      <img src="https://raw.githubusercontent.com/fingerly-io/.github/main/assets/logo-light.svg" alt="Fingerly" height="44">
+    </picture>
+  </a>
+</p>
 
-React Native bindings for Fingerly (`0.3.0`, `v: 3`). A bridge to the native iOS
-and Android SDKs, which do the collecting.
+<p align="center"><b>Fingerly for React Native</b><br>Device intelligence and fraud signals in your React Native app, through one TypeScript API over the native iOS and Android SDKs.</p>
 
-```sh
-pnpm add @fingerly/react-native@^0.3.0
-cd ios && pod install
-```
+<p align="center">
+  <a href="https://www.npmjs.com/package/@fingerly/react-native"><img src="https://img.shields.io/npm/v/@fingerly/react-native?style=flat-square" alt="npm version"></a>
+  <a href="https://github.com/fingerly-io/sdk-react-native/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/fingerly-io/sdk-react-native/ci.yml?style=flat-square" alt="CI status"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue?style=flat-square" alt="Licence: Apache-2.0"></a>
+  <img src="https://img.shields.io/badge/react%20native-%E2%89%A50.73-blue?style=flat-square" alt="React Native 0.73 or newer">
+  <a href="https://docs.fingerly.io/docs/sdks/react-native"><img src="https://img.shields.io/badge/docs-docs.fingerly.io-informational?style=flat-square" alt="Documentation"></a>
+</p>
 
-Requires React Native **0.73** or newer. Autolinking handles the rest.
+<p align="center"><img src="https://raw.githubusercontent.com/fingerly-io/.github/main/assets/banner.webp" alt="Fingerly" width="100%"></p>
+
+## What is this
+
+`@fingerly/react-native` (`0.3.0`, `v: 3`) is the React Native bridge to the Fingerly native iOS and Android SDKs, which do the collecting. You call `identify()` from JavaScript and get back a request ID and a visitor ID to send to your own backend, which decides what to do. [Fingerly](https://fingerly.io) is a device intelligence API that helps you protect signups, logins and payments from fraud and abuse.
+
+## Getting started
+
+1. **Get a key.** In the [Fingerly dashboard](https://dashboard.fingerly.io), open **Integration > SDK keys** and create a public key for your app. [How keys work](https://docs.fingerly.io/docs/api-keys).
+2. **Install the package.** Autolinking handles the rest.
+
+   ```sh
+   pnpm add @fingerly/react-native@^0.3.0
+   cd ios && pod install
+   ```
+
+   Rebuild the native app afterwards. `npm install @fingerly/react-native@^0.3.0` and `yarn add @fingerly/react-native@^0.3.0` work as well.
+
+3. **Identify.**
+
+   ```ts
+   import { load } from '@fingerly/react-native'
+
+   // consent: only once you have consent (or another lawful basis)
+   const fingerly = await load({ apiKey: 'fly_pk_production_…', consent: 'granted' })
+   const { requestId, visitorId, suspectScore, suspectLevel } = await fingerly.identify({ tag: 'checkout' })
+
+   // Send requestId to your backend and make the decision there.
+   ```
+
+Requires React Native **0.73** or newer.
+
+## Contents
+
+- [Identify](#identify)
+- [Consent](#consent)
+- [Erasure](#erasure)
+- [Errors](#errors)
+- [Reading the report](#reading-the-report)
+- [Platform setup](#platform-setup)
+- [How it works](#how-it-works)
+- [Requirements](#requirements)
+- [Documentation](#documentation)
+- [Development](#development)
+- [Help](#help)
+- [Licence](#licence)
 
 ## Identify
 
-```ts
-import { load } from '@fingerly/react-native'
+The key is a **publishable** SDK key from the dashboard, and it is safe in a shipped bundle: it is scoped to the app identifiers and, on production Android keys, the signing certificate SHA-256 digests (`AllowedAndroidSigners`) you list. A **secret** key is refused when it arrives from a client, so pasting one in does not work by design.
 
-// consent: only once you have consent (or another lawful basis)
-const fingerly = await load({ apiKey: 'fly_pk_production_…', consent: 'granted' })
-const { requestId, visitorId, suspectScore, suspectLevel } = await fingerly.identify({ tag: 'checkout' })
+`identify()` collects and submits a single-pass `v: 3` identification (`1-RTT` steady state through cached `next_attestation` challenge offers). It resolves with what the server said: `requestId`, `visitorId` and, by default, `suspectScore` and `suspectLevel`, so there is no second call to make.
 
-// Send requestId to your backend and make the decision there.
-```
+- Under `v: 3` (Option B), whenever `identifiable === false`, `visitorId` is `""` and `visitorIsNew` is `false`: the server never mints a fallback visitor ID when device signals are insufficient.
+- The score is a convenience for showing a result straight away. Each SDK key has a setting that hides it from apps, and then both `suspectScore` and `suspectLevel` are `null`, exactly as on a check nobody scored. An app cannot tell which it was, so read `null` as "no answer here", never as clean.
+- The signals behind a score never reach the device. Read them on your backend, through the server-side event read by `requestId` or webhooks, or in the dashboard.
+- `visitorConfidence`, `visitorIsNew`, `identifiable` and `duplicate` can be `null` when the server did not say, which is not the same as `0` or `false`.
+- Send the `requestId` and `visitorId` to your own backend with the request they belong to, and let your backend decide: **the score in your hand came from a device you do not control**, and an app that branches on it locally is an app whose branch can be patched out.
 
-The key is a **publishable** SDK key from the dashboard, and it is safe in a
-shipped bundle — it is scoped to the app identifiers and (on production Android
-keys) the signing certificate SHA-256 digests (`AllowedAndroidSigners`) you
-list. A **secret** key is refused when it arrives from a client, so pasting one
-in does not work by design.
+| Option | What it does |
+| --- | --- |
+| `tag` | A string echoed back on the finished event, for your own correlation. |
+| `submit: false` | Collect without sending anything. It resolves with `{ report }`, the raw report and nothing else. Or call `fingerly.collect()` to read the `SignalReport` directly. |
+| `automatic: true` | For a call your app makes on its own rather than in answer to the user: on start, on a timer, on returning to the foreground. It joins an identification already in flight instead of starting another, and waits out a transient failure instead of repeating it at once. |
 
-`identify()` collects and submits a single-pass `v: 3` identification (`1-RTT`
-steady-state via cached `next_attestation` challenge offers). It resolves with
-what the server said: `requestId`, `visitorId` and, by default, `suspectScore`
-and `suspectLevel`, so there is no second call to make.
-
-Under **Option B** (`v: 3`), whenever `identifiable === false`, `visitorId` is
-`""` and `visitorIsNew` is `false` — the server never mints a fallback visitor
-ID when device signals are insufficient. `visitorConfidence`, `visitorIsNew`,
-`identifiable` and `duplicate` can be `null` when the server did not say, which
-is not the same as `0` or `false`.
-
-The score is a convenience for showing a result straight away. Each SDK key has
-a setting that hides it from apps, and then both `suspectScore` and
-`suspectLevel` are `null`, exactly as on a check nobody scored: an app cannot
-tell which it was, so read `null` as "no answer here", never as clean. The
-signals behind a score never reach the device; read them on your backend,
-through the server-side event read by `requestId` or webhooks, or in the
-dashboard. Send `requestId` and `visitorId` to your own backend with the request
-they belong to, and let your backend decide: **the score in your hand came from
-a device you do not control**, and an app that branches on it locally is an app
-whose branch can be patched out.
-
-Pass `{ submit: false }` to collect without sending anything; it resolves with
-`{ report }`, the raw report and nothing else. Or call `fingerly.collect()` to
-read the `SignalReport` directly.
-
-Pass `{ automatic: true }` for a call your app makes on its own rather than in
-answer to the user: on start, on a timer, on returning to the foreground. It
-joins an identification already in flight instead of starting another, and
-waits out a transient failure instead of repeating it at once.
+`nativeVersion()` returns the version of the native SDK that did the collecting.
 
 ## Consent
 
-The SDK identifies nobody until it is told consent is `'granted'`. The usual
-pattern is to load it at launch with the default `'pending'` and pass on the
-answer from your consent tool when it arrives:
+The SDK identifies nobody until it is told consent is `'granted'`. The usual pattern is to load it at launch with the default `'pending'` and pass on the answer from your consent tool when it arrives:
 
 ```ts
 import { ConsentError, load } from '@fingerly/react-native'
@@ -82,15 +105,9 @@ fingerly.consent   // 'granted', 'pending' or 'denied'
 | `setConsent(state)` | Records the decision. Synchronous and safe to call repeatedly. |
 | `consent` | The state last given to the native SDK, read-only. |
 
-The default is `'pending'`, so an integration that never mentions consent
-identifies nobody. Pass `consent: 'granted'` to `load` only when you already
-have consent, or another lawful basis. Anything other than the three states
-throws a `TypeError` rather than being guessed at.
+The default is `'pending'`, so an integration that never mentions consent identifies nobody. Pass `consent: 'granted'` to `load` only when you already have consent, or another lawful basis. Anything other than the three states throws a `TypeError` rather than being guessed at.
 
-While the state is anything but `granted`, the native SDK runs no source,
-reads and writes no container storage or attestation key state, and sends
-nothing. `identify()` and `collect()` reject with a `ConsentError`, whose `code`
-is `'consent_required'` and whose `state` says which state refused the call:
+While the state is anything but `granted`, the native SDK runs no source, reads and writes no container storage or attestation key state, and sends nothing. `identify()` and `collect()` reject with a `ConsentError`, whose `code` is `'consent_required'` and whose `state` says which state refused the call:
 
 ```ts
 try {
@@ -102,21 +119,13 @@ try {
 }
 ```
 
-A change applies to calls already in flight as well as later ones. Consent
-withdrawn halfway through an `identify()` stops it before the next source
-starts and before anything is submitted, and that call rejects with
-`ConsentError`.
+A change applies to calls already in flight as well as later ones. Consent withdrawn halfway through an `identify()` stops it before the next source starts and before anything is submitted, and that call rejects with `ConsentError`.
 
-Loading collects and sends nothing, whatever the state, so calling `load` at
-launch before the user has been asked is safe. The native SDK holds one state
-for the whole app: each `load` sets it to the `consent` passed, or `'pending'`
-when there is none, so pass `consent` on every `load`.
+Loading collects and sends nothing, whatever the state, so calling `load` at launch before the user has been asked is safe. The native SDK holds one state for the whole app: each `load` sets it to the `consent` passed, or `'pending'` when there is none, so pass `consent` on every `load`.
 
-Every submission the native SDK sends carries `"consent": "granted"`, and the
-server refuses any other value with `422 consent_required`. The native SDK only
-sends while consent is granted, so that refusal should never be seen.
+Every submission the native SDK sends carries `"consent": "granted"`, and the server refuses any other value with `422 consent_required`. The native SDK only sends while consent is granted, so that refusal should never be seen.
 
-## Erasure (GDPR / privacy right to erasure only)
+## Erasure
 
 ```ts
 import { deleteStoredIdentity } from '@fingerly/react-native'
@@ -124,74 +133,18 @@ import { deleteStoredIdentity } from '@fingerly/react-native'
 await deleteStoredIdentity()
 ```
 
-Strictly for **user-initiated GDPR / privacy erasure** ("Delete My Data" or
-account deletion) — never for routine logout, session expiry, or account
-switching (repeated `install_id` resets on the same hardware key within 24 hours
-trigger churn telemetry). Atomically deletes the local `install_id` and hardware
-attestation key state (`Application Support/io.fingerly.sdk/` on iOS with
-`isExcludedFromBackup = true` and zero Keychain usage, and the local install
-record plus persistent `AndroidKeyStore` v3 EC P-256 signing key
-`io.fingerly.sdk.attest.v3` on Android) so subsequent re-consented sessions mint
-an unlinked `visitorId`. It needs no `load` and no consent, sends nothing, and
-resolves once no record remains, including when there was none. It rejects with
-a `FingerlyError` when the delete fails. To stop identifying as well, set
-consent to `'denied'` first.
+Strictly for **user-initiated GDPR or privacy erasure** ("Delete My Data" or account deletion), never for routine logout, session expiry or account switching: repeated `install_id` resets on the same hardware key within 24 hours trigger churn telemetry.
 
-## This package collects nothing
+It atomically deletes the local `install_id` and the hardware attestation key state, so later re-consented sessions mint an unlinked `visitorId`:
 
-That is the design, not a limitation, and it is the most important thing to
-understand about it.
+- On iOS, `Application Support/io.fingerly.sdk/`, kept with `isExcludedFromBackup = true` and with zero Keychain usage.
+- On Android, the local install record plus the persistent `AndroidKeyStore` v3 EC P-256 signing key `io.fingerly.sdk.attest.v3`.
 
-Every signal worth having on a phone is unreachable from JavaScript: `lstat` on
-`/var/jb`, the dyld image list, the thread names Frida's runtime leaves behind,
-the `P_TRACED` flag, Secure Enclave App Attest and TEE Keystore signing, the TLS
-chain the app was actually served. A React Native bridge can reach none of them.
-
-So a package that collected what it *could* reach from JavaScript would report a
-jailbroken, instrumented device as clean — which is worse than reporting
-nothing, because a customer would believe it.
-
-This package calls the native SDK and hands back what it produced. The collection
-logic lives in one place per platform, in Swift and in Kotlin, and improving it
-improves React Native, Flutter, Lynx and native apps at the same time rather
-than four times over. What the signals mean is decided on the server.
-
-If the native module is missing, `load()` throws and says so. It does not
-degrade to a JavaScript-only mode, for the reason above.
-
-## The platform string
-
-This package reports `react-native-ios` or `react-native-android`, never the
-bare `react-native`. That is not cosmetic: the server maps an SDK platform onto
-one of three scoring profiles by looking for `ios` or `android` in the string,
-and a submission that names neither falls through to the **browser** profile —
-where `jailbreak` and `simulator` are not signals at all and everything the
-native SDK collected is worth zero.
-
-Nothing fails when that goes wrong. The submission succeeds, the event is
-stored, the report looks full, and the signal never fires. `tests/bridge.test.ts`
-pins it for that reason.
-
-## Reading the report
-
-```ts
-const report = await fingerly.collect()   // no submission
-
-for (const [id, outcome] of Object.entries(report.sources)) {
-  console.log(id, outcome.status, `${outcome.ms}ms`, outcome.reason ?? '')
-}
-```
-
-Five statuses, never a hole: `ok`, `unsupported`, `blocked`, `timeout`, `error`.
-The distinction matters — a `blocked` jailbreak probe is stronger evidence than
-any value it could have returned, because `lstat` on a path does not fail unless
-something made it.
+It needs no `load` and no consent, sends nothing, and resolves once no record remains, including when there was none. It rejects with a `FingerlyError` when the delete fails. To stop identifying as well, set consent to `'denied'` first.
 
 ## Errors
 
-`identify()` rejects with a `FingerlyError`. Its `message` is the server's and its
-`status` is the HTTP status when there was one, so callers do not have to depend
-on React Native's platform-specific native error shape:
+`identify()` rejects with a `FingerlyError`. Its `message` is the server's and its `status` is the HTTP status when there was one, so callers do not have to depend on React Native's platform-specific native error shape:
 
 ```ts
 import { FingerlyError } from '@fingerly/react-native'
@@ -207,47 +160,46 @@ try {
 
 The two configuration failures worth branching on are:
 
-- **401** — the key is wrong, or was presented from an app identifier it does
-  not list.
-- **402** — the organisation is not accepting traffic.
+- **401**: the key is wrong, or was presented from an app identifier it does not list.
+- **402**: the organisation is not accepting traffic.
 
-Both are your configuration rather than the user's behaviour, and neither is
-worth retrying. The native SDK retries the ones that are (429 and 5xx) with
-full-jitter backoff before it ever rejects.
+Both are your configuration rather than the user's behaviour, and neither is worth retrying. The native SDK retries the ones that are (429 and 5xx) with full-jitter backoff before it ever rejects.
 
-When the server asked for a pause with `Retry-After`, the error carries it as
-`retryAfterMs`. Wait at least that long before identifying again. It is
-undefined when the response named no wait.
+When the server asked for a pause with `Retry-After`, the error carries it as `retryAfterMs`. Wait at least that long before identifying again. It is `undefined` when the response named no wait.
 
-A call refused for want of consent rejects with `ConsentError`, a subclass of
-`FingerlyError` with `code: 'consent_required'`, a `state`, and no `status`.
-Answer it with `setConsent`, not a retry. See [Consent](#consent).
+A call refused for want of consent rejects with `ConsentError`, a subclass of `FingerlyError` with `code: 'consent_required'`, a `state`, and no `status`. Answer it with `setConsent`, not a retry. See [Consent](#consent).
 
-## Native SDK dependencies (`0.3.0`)
+## Reading the report
 
-Both platforms are implemented and exercised through React Native's New
-Architecture. `ios/FingerlyModule.swift` calls the
-[iOS SDK (`0.3.0`)](https://github.com/fingerly-io/sdk-ios) (15 native sources +
-`FingerlyPtrAuth` integrity + App Attest) and `android/…/FingerlyModule.kt` calls
-the Android SDK (`io.fingerly:fingerly:0.3.0`, 20 native sources + persistent
-24h TEE Keystore signing); each forwards to that SDK's `FingerlyBridge`, with no
-scoring logic of its own by design.
+```ts
+const report = await fingerly.collect()   // no submission
 
-On iOS, `pod install` downloads the matching `Fingerly.xcframework` (`0.3.0`)
-from `https://maven.fingerly.io/ios/` and verifies its SHA-256 checksum, so the
-Podfile needs no separate entry for the native SDK.
+for (const [id, outcome] of Object.entries(report.sources)) {
+  console.log(id, outcome.status, `${outcome.ms}ms`, outcome.reason ?? '')
+}
+```
 
-On Android, the module depends on `io.fingerly:fingerly:0.3.0` from
-`https://maven.fingerly.io`, which the bridge adds to the Gradle build itself
-(checking `mavenLocal()` first for local staging).
+Five statuses, never a hole: `ok`, `unsupported`, `blocked`, `timeout`, `error`. A `blocked` outcome is information in its own right, not a missing value: a `blocked` jailbreak probe is stronger evidence than any value it could have returned, because `lstat` on a path does not fail unless something made it. `collect()` needs consent and rejects with a `ConsentError` without it.
 
-**Installed-app checks are opt-in on Android (`io.fingerly:fingerly-app-checks:0.3.0`).**
-Core `io.fingerly:fingerly:0.3.0` carries zero `<queries>` entries in its
-manifest because Google Play treats installed-app visibility as personal and
-sensitive data. If your app justifies package visibility for the 17 root
-managers, hooking frameworks and dual-space cloners in Play review, add the
-sibling artifact at `0.3.0` and declare "App activity: Installed apps" on the
-Data safety form:
+## Platform setup
+
+The bridge forwards to the native `0.3.0` SDKs and adds no scoring logic of its own. `ios/FingerlyModule.swift` calls the [iOS SDK (`0.3.0`)](https://github.com/fingerly-io/sdk-ios) (15 native sources, `FingerlyPtrAuth` integrity and App Attest), and `android/…/FingerlyModule.kt` calls the Android SDK (`io.fingerly:fingerly:0.3.0`, 20 native sources and persistent 24h TEE Keystore signing); each forwards to that SDK's `FingerlyBridge`.
+
+<details>
+<summary><b>iOS</b></summary>
+
+`pod install` downloads the matching `Fingerly.xcframework` (`0.3.0`) from `https://maven.fingerly.io/ios/` and verifies its SHA-256 checksum, so the Podfile needs no separate entry for the native SDK. The same binary is published as a Swift package at [sdk-ios](https://github.com/fingerly-io/sdk-ios).
+
+The Play Integrity project number passed to `load` is ignored on iOS.
+
+</details>
+
+<details>
+<summary><b>Android</b></summary>
+
+The Android module depends on `io.fingerly:fingerly:0.3.0` from Fingerly's Maven repository, `https://maven.fingerly.io`, which the bridge adds to the Gradle build itself, so the host app needs no repository override. The bridge checks `mavenLocal()` first, for local staging.
+
+**Installed-app checks are opt-in (`io.fingerly:fingerly-app-checks:0.3.0`).** Core `io.fingerly:fingerly:0.3.0` carries zero `<queries>` entries in its manifest, because Google Play treats installed-app visibility as personal and sensitive data. If your app can justify package visibility for the 17 root managers, hooking frameworks and dual-space cloners in its Play review, add the sibling artifact at `0.3.0` to your app's Android module and declare "App activity: Installed apps" in the Data safety form:
 
 ```groovy
 // android/app/build.gradle
@@ -256,16 +208,9 @@ dependencies {
 }
 ```
 
-`FingerlyModule` automatically wires `FingerlyAppChecks()` when the artifact is
-present on the classpath (without `Class.forName` reflection). Without it, no
-`<queries>` entries are merged and nothing about other installed apps leaves the
-device, while sandbox/process-map cloner detection still runs.
+`FingerlyModule` wires `FingerlyAppChecks()` automatically when the artifact is on the classpath, without `Class.forName` reflection. Without it, no `<queries>` entries are merged and nothing about other installed apps leaves the device, while sandbox and process-map cloner detection still runs.
 
-**Play Integrity (Android, optional — `io.fingerly:fingerly-play-integrity:0.3.0`).**
-To add Google Play Integrity Standard tokens bound to the `v: 3`
-`statementDigest` (ADR 0026), add `io.fingerly:fingerly-play-integrity:0.3.0` to
-your Android app module and pass your Google Cloud project number (the one
-linked in Play Console) to `load`:
+**Play Integrity (optional, `io.fingerly:fingerly-play-integrity:0.3.0`).** To add Google Play Integrity Standard tokens bound to the `v: 3` `statementDigest`, add the artifact to your app's Android module and pass your Google Cloud project number, the one linked to the app in Play Console, to `load`:
 
 ```groovy
 // android/app/build.gradle
@@ -282,20 +227,37 @@ const fingerly = await load({
 })
 ```
 
-`FingerlyModule` automatically wires `FingerlyPlayIntegrity()` when linked. A
-provider of your own, registered from native code with
-`FingerlyBridge.setPlayIntegrity(provider)` before `load`, is used in place of
-the artifact's. On Android, a project number with neither is a configuration
-error: the
-module keeps the previous configuration, and every `identify` and `collect`
-rejects with a `FingerlyError` ("playIntegrityCloudProjectNumber was set but the
-io.fingerly:fingerly-play-integrity artifact is not on the classpath", native
-code `play_integrity_unavailable`) until a `load` without that mismatch
-replaces it. Without a project number, Play Integrity is off and nothing fails.
-On iOS the project number is ignored.
+`FingerlyModule` wires `FingerlyPlayIntegrity()` automatically when the artifact is linked. A provider of your own, registered from native code with `FingerlyBridge.setPlayIntegrity(provider)` before `load`, is used in place of the artifact's.
 
-This bridge is licensed under Apache-2.0. The native SDKs it depends on are
-closed binaries under the Fingerly SDK License.
+A project number with neither is a configuration error: the module keeps the previous configuration, and every `identify` and `collect` rejects with a `FingerlyError` ("playIntegrityCloudProjectNumber was set but the io.fingerly:fingerly-play-integrity artifact is not on the classpath", native code `play_integrity_unavailable`) until a `load` without that mismatch replaces it. Without a project number, Play Integrity is off and nothing fails.
+
+The rest of the setup, the service account uploaded to your Fingerly project and the daily budget, is covered by the Android SDK's [install notes](https://github.com/fingerly-io/sdk-android/blob/main/INSTALL.md#optional-play-integrity).
+
+</details>
+
+## How it works
+
+This package collects nothing, by design. Almost everything worth collecting on a phone is out of reach of JavaScript: `lstat` on jailbreak paths, the dyld image list, the `P_TRACED` flag, Secure Enclave App Attest and TEE Keystore signing, the TLS chain the app was actually served. A package that collected only what JavaScript can reach would report a jailbroken, instrumented device as clean. That is worse than reporting nothing, because a customer would believe it.
+
+The package calls the native SDK and hands back what it produced. The collection logic lives in one place per platform, in Swift and in Kotlin, so improving it improves React Native, Flutter, Lynx and native apps at the same time rather than four times over. What the signals mean is decided on the server.
+
+If the native module is missing, `load()` throws and says so. It does not degrade to a JavaScript-only mode, for the reason above.
+
+**The platform string.** This package reports `react-native-ios` or `react-native-android`, never the bare `react-native`. That is not cosmetic: the server maps an SDK platform onto one of three scoring profiles by looking for `ios` or `android` in the string, and a submission that names neither falls through to the browser profile, where `jailbreak` and `simulator` are not signals at all and everything the native SDK collected is worth zero. Nothing fails when it is wrong. The submission succeeds, the event is stored and the report looks full, but the mobile checks do not apply. `tests/bridge.test.ts` pins the names for that reason.
+
+Both platforms are implemented and exercised through React Native's New Architecture.
+
+## Requirements
+
+| | Minimum |
+| --- | --- |
+| React Native | 0.73 (peer dependency `react-native >=0.73`) |
+| iOS | 13.0 |
+| Android | 5.0 (API 21) |
+
+## Documentation
+
+Guides and the API reference: <https://docs.fingerly.io/docs/sdks/react-native>.
 
 ## Development
 
@@ -305,7 +267,14 @@ pnpm test
 pnpm lint
 ```
 
-The contract tests run against a lightweight `react-native` stub
-(`tests/stub-react-native.ts`). Clone with `--recurse-submodules`, or run
-`git submodule update --init --recursive`, so the shared `@fingerly/types`
-contract is available in standalone checkouts.
+The contract tests run against a lightweight stub for `react-native` rather than the real package: pulling the React Native tree in to unit-test a thin bridge would be a hundred megabytes of install for nothing. See `tests/stub-react-native.ts`.
+
+Clone this repository with `--recurse-submodules`, or run `git submodule update --init --recursive`, so the shared `@fingerly/types` contract is available in standalone checkouts.
+
+## Help
+
+Open an issue on this repository, or write to <support@fingerly.io>. Security issues: <security@fingerly.io>.
+
+## Licence
+
+This bridge is licensed under [Apache-2.0](LICENSE). The native SDKs it depends on are closed binaries under the Fingerly SDK License.
