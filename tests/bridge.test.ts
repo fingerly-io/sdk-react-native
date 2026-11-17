@@ -14,12 +14,28 @@ import type {
   IdentifyResult,
   NativeIdentifyResult,
   RiskSignal,
+  SignalName,
   SignalReport,
-  SuspectLevel,
 } from '../src/index.js'
 
 // Imported after the stub so the module under test binds to the same objects.
-const { ConsentError, FingerlyError, deleteStoredIdentity, load, nativeVersion } = await import('../src/index.js')
+const {
+  Confidence,
+  ConsentError,
+  ConsentState,
+  EventState,
+  FingerlyError,
+  SdkPlatform,
+  Signal,
+  SuspectLevel,
+  deleteStoredIdentity,
+  load,
+  nativeVersion,
+} = await import('../src/index.js')
+type ConsentState = import('../src/index.js').ConsentState
+type EventState = import('../src/index.js').EventState
+type Signal = import('../src/index.js').Signal
+type SuspectLevel = import('../src/index.js').SuspectLevel
 
 /** A native module that records what it was handed. */
 function installNative() {
@@ -545,6 +561,169 @@ describe('v3 TypeScript contract re-exports', () => {
   })
 })
 
+/** Every signal group and raw detector the server reports (`server/domain/risk`). */
+const SERVER_SIGNALS = [
+  'active_call',
+  'android_emulator',
+  'antidetect_browser',
+  'anycast_ip',
+  'app_cloner',
+  'attestation_downgrade',
+  'attestation_failed',
+  'attestation_missing',
+  'automation',
+  'bad_bot',
+  'bogon_ip',
+  'bot',
+  'browser_tampering',
+  'cloned_app',
+  'custom_root_ca',
+  'datacenter_ip',
+  'datacenter_proxy',
+  'developer_tools',
+  'device_activity_high',
+  'device_activity_very_high',
+  'device_farm',
+  'device_inconsistent',
+  'embedded_web_view',
+  'emulator',
+  'fetch_metadata_missing',
+  'fingerprint_suppressed',
+  'frida',
+  'frida_detected',
+  'geo_mismatch',
+  'high_activity',
+  'incognito',
+  'incognito_mode',
+  'ios_simulator',
+  'ip_abuser',
+  'ip_blocklist',
+  'ip_blocklist_attack_source',
+  'ip_blocklist_email_spam',
+  'ip_reputation',
+  'jailbreak',
+  'jailbroken_device',
+  'location_spoofing',
+  'mitm_attack',
+  'network_anomaly',
+  'play_app_unrecognized',
+  'play_device_integrity_failed',
+  'privacy_settings',
+  'probe_errors',
+  'proxy',
+  'remote_control',
+  'repeated_reinstall',
+  'report_incomplete',
+  'residential_proxy',
+  'residential_proxy_high_confidence',
+  'residential_proxy_low_confidence',
+  'residential_proxy_medium_confidence',
+  'root_apps',
+  'rooted_device',
+  'secondary_user_profile',
+  'simulator',
+  'tampering',
+  'tor',
+  'virtual_machine',
+  'vpn',
+  'vpn_high_confidence',
+  'vpn_low_confidence',
+  'vpn_medium_confidence',
+  'vpn_mobile',
+  'vpn_os_mismatch',
+  'vpn_public',
+  'vpn_relay',
+  'vpn_timezone',
+  'web_ticket_invalid',
+  'web_ticket_missing',
+]
+
+/** `fingerprint_suppressed` as `FingerprintSuppressed`: the value in PascalCase, word by word. */
+function memberName(value: string): string {
+  return value
+    .split(/[_-]/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join('')
+}
+
+describe('named constants', () => {
+  it('are the @fingerly/types objects, so the names match the web SDK', async () => {
+    const types = await import('@fingerly/types')
+
+    expect(Confidence).toBe(types.Confidence)
+    expect(ConsentState).toBe(types.ConsentState)
+    expect(EventState).toBe(types.EventState)
+    expect(SdkPlatform).toBe(types.SdkPlatform)
+    expect(Signal).toBe(types.Signal)
+    expect(SuspectLevel).toBe(types.SuspectLevel)
+  })
+
+  it('pin every value to the server lists', () => {
+    expect([...Object.values(Signal)].sort()).toEqual(SERVER_SIGNALS)
+    expect(Object.values(Signal)).toHaveLength(73)
+    expect(Object.values(Signal)).not.toContain('app_attest_key_churn')
+    expect(Object.values(SuspectLevel)).toEqual(['low', 'medium', 'high'])
+    expect(Object.values(Confidence)).toEqual(['low', 'medium', 'high'])
+    expect(Object.values(EventState)).toEqual(['pending', 'enriched', 'unavailable'])
+    expect(Object.values(ConsentState)).toEqual(['granted', 'pending', 'denied'])
+    expect(Object.values(SdkPlatform)).toEqual([
+      'web',
+      'android',
+      'ios',
+      'react-native-ios',
+      'react-native-android',
+      'flutter-ios',
+      'flutter-android',
+      'lynx-ios',
+      'lynx-android',
+    ])
+  })
+
+  it('name each member after its value', () => {
+    for (const constants of [Signal, SuspectLevel, Confidence, EventState, ConsentState, SdkPlatform]) {
+      for (const [member, value] of Object.entries(constants)) {
+        expect(member).toBe(memberName(value))
+      }
+    }
+  })
+
+  it('compare equal to what the server answered, and an unknown value passes through', async () => {
+    const native = installNative()
+    const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: ConsentState.Granted })
+
+    const result = await fingerly.identify()
+    expect(result.state).toBe(EventState.Enriched)
+    expect(result.suspectLevel).toBe(SuspectLevel.High)
+    expect(native.configure.mock.calls[0]?.[2]).toBe(SdkPlatform.ReactNativeIos)
+    expect(native.configure.mock.calls[0]?.[3]).toBe(ConsentState.Granted)
+
+    native.identify.mockImplementationOnce(async () =>
+      JSON.stringify({
+        requestId: 'req_new_values',
+        visitorId: 'vis_7Kq3',
+        identifiable: true,
+        state: 'state_from_a_newer_server',
+        suspectScore: 50,
+        suspectLevel: 'level_from_a_newer_server',
+        report: { schema: 2, sources: {} },
+      }),
+    )
+    const newer = await fingerly.identify()
+    expect(newer.state).toBe('state_from_a_newer_server')
+    expect(newer.suspectLevel).toBe('level_from_a_newer_server')
+  })
+
+  it('type the result fields with the constants and still accept plain strings', () => {
+    expectTypeOf(SuspectLevel.High).toEqualTypeOf<'high'>()
+    expectTypeOf<NativeIdentifyResult['suspectLevel']>().toEqualTypeOf<SuspectLevel | null>()
+    expectTypeOf<EventState>().toMatchTypeOf<NativeIdentifyResult['state']>()
+    expectTypeOf<'state_from_a_newer_server'>().toMatchTypeOf<NativeIdentifyResult['state']>()
+    expectTypeOf<Signal>().toEqualTypeOf<RiskSignal>()
+    expectTypeOf<'signal_from_a_newer_server'>().toMatchTypeOf<SignalName>()
+    expectTypeOf<FingerlyOptions['consent']>().toEqualTypeOf<ConsentState | undefined>()
+  })
+})
+
 describe('native failures and error codes', () => {
   it.each([
     [401, 'invalid sdk key'],
@@ -887,9 +1066,9 @@ describe('version, native coordinates, and bridge selector parity (0.3.0)', () =
     const fetchScript = readFileSync(new URL('../ios/fetch-fingerly-xcframework.sh', import.meta.url), 'utf8')
 
     expect(pkg.version).toBe('0.3.0')
-    // The contract types may move ahead of the bridge; it needs the v3 types from 0.3.0 on.
+    // The contract types may move ahead of the bridge; it needs the named constants from 0.4.0 on.
     const [typesMajor, typesMinor] = typesPkg.version.split('.').map(Number)
-    expect(typesMajor === 0 && (typesMinor ?? 0) >= 3).toBe(true)
+    expect(typesMajor === 0 && (typesMinor ?? 0) >= 4).toBe(true)
     expect(podspec).toMatch(/s\.version\s*=\s*'0\.3\.0'/)
     expect(binary).toEqual({
       version: '0.3.0',
