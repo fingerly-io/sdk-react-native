@@ -125,7 +125,7 @@ class FingerlyModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
     }
 
     /**
-     * Forwards `tag`, `submit`, and `automatic` to the native Android `0.3.0`
+     * Forwards `tag`, `submit`, and `automatic` to the native Android `0.4.0`
      * bridge.
      */
     @ReactMethod

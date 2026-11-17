@@ -74,12 +74,12 @@ dependencies {
 
     // Core Android SDK (`v: 3`). Ships zero `<queries>` entries and zero Google
     // Play Services dependencies.
-    implementation 'io.fingerly:fingerly:0.3.0'
+    implementation 'io.fingerly:fingerly:0.4.0'
 
     // Compile-only hooks for the opt-in artifacts (`io.fingerly:fingerly-app-checks`
     // and `io.fingerly:fingerly-play-integrity`). `compileOnly` never merges
     // `<queries>` or Play Services into the host APK unless the host app adds
     // those artifacts itself.
-    compileOnly 'io.fingerly:fingerly-app-checks:0.3.0'
-    compileOnly 'io.fingerly:fingerly-play-integrity:0.3.0'
+    compileOnly 'io.fingerly:fingerly-app-checks:0.4.0'
+    compileOnly 'io.fingerly:fingerly-play-integrity:0.4.0'
 }

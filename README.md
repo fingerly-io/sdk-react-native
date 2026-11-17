@@ -21,7 +21,7 @@
 
 ## What is this
 
-`@fingerly/react-native` (`0.3.0`, `v: 3`) is the React Native bridge to the Fingerly native iOS and Android SDKs, which do the collecting. You call `identify()` from JavaScript and get back a request ID and a visitor ID to send to your own backend, which decides what to do. [Fingerly](https://fingerly.io) is a device intelligence API that helps you protect signups, logins and payments from fraud and abuse.
+`@fingerly/react-native` (`0.4.0`, `v: 3`) is the React Native bridge to the Fingerly native iOS and Android SDKs, which do the collecting. You call `identify()` from JavaScript and get back a request ID and a visitor ID to send to your own backend, which decides what to do. [Fingerly](https://fingerly.io) is a device intelligence API that helps you protect signups, logins and payments from fraud and abuse.
 
 ## Getting started
 
@@ -29,19 +29,19 @@
 2. **Install the package.** Autolinking handles the rest.
 
    ```sh
-   pnpm add @fingerly/react-native@^0.3.0
+   pnpm add @fingerly/react-native@^0.4.0
    cd ios && pod install
    ```
 
-   Rebuild the native app afterwards. `npm install @fingerly/react-native@^0.3.0` and `yarn add @fingerly/react-native@^0.3.0` work as well.
+   Rebuild the native app afterwards. `npm install @fingerly/react-native@^0.4.0` and `yarn add @fingerly/react-native@^0.4.0` work as well.
 
 3. **Identify.**
 
    ```ts
-   import { load } from '@fingerly/react-native'
+   import { ConsentState, load } from '@fingerly/react-native'
 
    // consent: only once you have consent (or another lawful basis)
-   const fingerly = await load({ apiKey: 'fly_pk_production_…', consent: 'granted' })
+   const fingerly = await load({ apiKey: 'fly_pk_production_…', consent: ConsentState.Granted })
    const { requestId, visitorId, suspectScore, suspectLevel } = await fingerly.identify({ tag: 'checkout' })
 
    // Send requestId to your backend and make the decision there.
@@ -52,6 +52,7 @@ Requires React Native **0.73** or newer.
 ## Contents
 
 - [Identify](#identify)
+- [Named values](#named-values)
 - [Consent](#consent)
 - [Erasure](#erasure)
 - [Errors](#errors)
@@ -84,19 +85,47 @@ The key is a **publishable** SDK key from the dashboard, and it is safe in a shi
 
 `nativeVersion()` returns the version of the native SDK that did the collecting.
 
+## Named values
+
+The fixed strings the API returns and the bridge accepts have names, the same objects `@fingerly/web-js` exports. Each is an `as const` object with a same-named type, and a member is its value in PascalCase, word by word (`SuspectLevel.High` is `'high'`, `Signal.FingerprintSuppressed` is `'fingerprint_suppressed'`):
+
+```ts
+import { EventState, SuspectLevel } from '@fingerly/react-native'
+
+const result = await fingerly.identify({ tag: 'checkout' })
+
+if (result.state === EventState.Unavailable) {
+  // The network lookup could not run, so the check was not scored.
+}
+if (result.suspectLevel === SuspectLevel.High) {
+  // Show a step-up screen while your backend makes the decision.
+}
+```
+
+| Constant | Members | Where it appears |
+| --- | --- | --- |
+| `SuspectLevel` | `Low`, `Medium`, `High` | `suspectLevel` on the `identify()` answer. |
+| `EventState` | `Enriched`, `Unavailable`, `Pending` | `state` on the `identify()` answer. An answer is never `Pending`, which only a server-side event read reports. |
+| `ConsentState` | `Granted`, `Pending`, `Denied` | The `consent` option on `load`, `setConsent`, `consent` and `ConsentError.state`. |
+| `SdkPlatform` | `ReactNativeIos`, `ReactNativeAndroid`, and the other SDKs' platforms | What the bridge reports itself as, and the SDK named on the event your backend reads. |
+| `Signal` | Every signal group and detector the server reports, such as `Signal.Jailbreak` and `Signal.VpnPublic` | Triggers on the event your backend reads and in webhooks. The signals never reach the device. |
+| `Confidence` | `Low`, `Medium`, `High` | A trigger's `confidence` on the event your backend reads. |
+
+Comparing with the plain string compiles as well. The bridge hands on the server's values as they came, so a value a newer server adds reaches the app unchanged rather than being dropped.
+
 ## Consent
 
 The SDK identifies nobody until it is told consent is `'granted'`. The usual pattern is to load it at launch with the default `'pending'` and pass on the answer from your consent tool when it arrives:
 
 ```ts
-import { ConsentError, load } from '@fingerly/react-native'
+import { ConsentError, ConsentState, load } from '@fingerly/react-native'
 
 const fingerly = await load({ apiKey: 'fly_pk_production_…' }) // consent is 'pending'
 
 // From your consent tool's callback:
-fingerly.setConsent(accepted ? 'granted' : 'denied')
+fingerly.setConsent(accepted ? ConsentState.Granted : ConsentState.Denied)
 
-fingerly.consent   // 'granted', 'pending' or 'denied'
+fingerly.consent   // ConsentState.Granted, ConsentState.Pending or ConsentState.Denied
 ```
 
 | Option / method | What it does |
@@ -105,7 +134,7 @@ fingerly.consent   // 'granted', 'pending' or 'denied'
 | `setConsent(state)` | Records the decision. Synchronous and safe to call repeatedly. |
 | `consent` | The state last given to the native SDK, read-only. |
 
-The default is `'pending'`, so an integration that never mentions consent identifies nobody. Pass `consent: 'granted'` to `load` only when you already have consent, or another lawful basis. Anything other than the three states throws a `TypeError` rather than being guessed at.
+The default is `'pending'`, so an integration that never mentions consent identifies nobody. Pass `consent: ConsentState.Granted` to `load` only when you already have consent, or another lawful basis. Anything other than the three states throws a `TypeError` rather than being guessed at.
 
 While the state is anything but `granted`, the native SDK runs no source, reads and writes no container storage or attestation key state, and sends nothing. `identify()` and `collect()` reject with a `ConsentError`, whose `code` is `'consent_required'` and whose `state` says which state refused the call:
 
@@ -114,7 +143,7 @@ try {
   await fingerly.identify()
 } catch (error) {
   if (error instanceof ConsentError) {
-    // error.state is 'pending' or 'denied'; nothing was collected or sent
+    // error.state is ConsentState.Pending or ConsentState.Denied; nothing was collected or sent
   }
 }
 ```
@@ -183,12 +212,12 @@ Five statuses, never a hole: `ok`, `unsupported`, `blocked`, `timeout`, `error`.
 
 ## Platform setup
 
-The bridge forwards to the native `0.3.0` SDKs and adds no scoring logic of its own. `ios/FingerlyModule.swift` calls the [iOS SDK (`0.3.0`)](https://github.com/fingerly-io/sdk-ios) (15 native sources, `FingerlyPtrAuth` integrity and App Attest), and `android/…/FingerlyModule.kt` calls the Android SDK (`io.fingerly:fingerly:0.3.0`, 20 native sources and persistent 24h TEE Keystore signing); each forwards to that SDK's `FingerlyBridge`.
+The bridge forwards to the native `0.4.0` SDKs and adds no scoring logic of its own. `ios/FingerlyModule.swift` calls the [iOS SDK (`0.4.0`)](https://github.com/fingerly-io/sdk-ios) (15 native sources, `FingerlyPtrAuth` integrity and App Attest), and `android/…/FingerlyModule.kt` calls the Android SDK (`io.fingerly:fingerly:0.4.0`, 20 native sources and persistent 24h TEE Keystore signing); each forwards to that SDK's `FingerlyBridge`.
 
 <details>
 <summary><b>iOS</b></summary>
 
-`pod install` downloads the matching `Fingerly.xcframework` (`0.3.0`) from `https://maven.fingerly.io/ios/` and verifies its SHA-256 checksum, so the Podfile needs no separate entry for the native SDK. The same binary is published as a Swift package at [sdk-ios](https://github.com/fingerly-io/sdk-ios).
+`pod install` downloads the matching `Fingerly.xcframework` (`0.4.0`) from `https://maven.fingerly.io/ios/` and verifies its SHA-256 checksum, so the Podfile needs no separate entry for the native SDK. The same binary is published as a Swift package at [sdk-ios](https://github.com/fingerly-io/sdk-ios).
 
 The Play Integrity project number passed to `load` is ignored on iOS.
 
@@ -197,32 +226,32 @@ The Play Integrity project number passed to `load` is ignored on iOS.
 <details>
 <summary><b>Android</b></summary>
 
-The Android module depends on `io.fingerly:fingerly:0.3.0` from Fingerly's Maven repository, `https://maven.fingerly.io`, which the bridge adds to the Gradle build itself, so the host app needs no repository override. The bridge checks `mavenLocal()` first, for local staging.
+The Android module depends on `io.fingerly:fingerly:0.4.0` from Fingerly's Maven repository, `https://maven.fingerly.io`, which the bridge adds to the Gradle build itself, so the host app needs no repository override. The bridge checks `mavenLocal()` first, for local staging.
 
-**Installed-app checks are opt-in (`io.fingerly:fingerly-app-checks:0.3.0`).** Core `io.fingerly:fingerly:0.3.0` carries zero `<queries>` entries in its manifest, because Google Play treats installed-app visibility as personal and sensitive data. If your app can justify package visibility for the 17 root managers, hooking frameworks and dual-space cloners in its Play review, add the sibling artifact at `0.3.0` to your app's Android module and declare "App activity: Installed apps" in the Data safety form:
+**Installed-app checks are opt-in (`io.fingerly:fingerly-app-checks:0.4.0`).** Core `io.fingerly:fingerly:0.4.0` carries zero `<queries>` entries in its manifest, because Google Play treats installed-app visibility as personal and sensitive data. If your app can justify package visibility for the 17 root managers, hooking frameworks and dual-space cloners in its Play review, add the sibling artifact at `0.4.0` to your app's Android module and declare "App activity: Installed apps" in the Data safety form:
 
 ```groovy
 // android/app/build.gradle
 dependencies {
-    implementation 'io.fingerly:fingerly-app-checks:0.3.0'
+    implementation 'io.fingerly:fingerly-app-checks:0.4.0'
 }
 ```
 
 `FingerlyModule` wires `FingerlyAppChecks()` automatically when the artifact is on the classpath, without `Class.forName` reflection. Without it, no `<queries>` entries are merged and nothing about other installed apps leaves the device, while sandbox and process-map cloner detection still runs.
 
-**Play Integrity (optional, `io.fingerly:fingerly-play-integrity:0.3.0`).** To add Google Play Integrity Standard tokens bound to the `v: 3` `statementDigest`, add the artifact to your app's Android module and pass your Google Cloud project number, the one linked to the app in Play Console, to `load`:
+**Play Integrity (optional, `io.fingerly:fingerly-play-integrity:0.4.0`).** To add Google Play Integrity Standard tokens bound to the `v: 3` `statementDigest`, add the artifact to your app's Android module and pass your Google Cloud project number, the one linked to the app in Play Console, to `load`:
 
 ```groovy
 // android/app/build.gradle
 dependencies {
-    implementation 'io.fingerly:fingerly-play-integrity:0.3.0'
+    implementation 'io.fingerly:fingerly-play-integrity:0.4.0'
 }
 ```
 
 ```ts
 const fingerly = await load({
   apiKey: 'fly_pk_production_…',
-  consent: 'granted',
+  consent: ConsentState.Granted,
   playIntegrityCloudProjectNumber: 123456789012,
 })
 ```

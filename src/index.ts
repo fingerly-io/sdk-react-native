@@ -21,11 +21,11 @@
  * conclusion of its own.
  *
  * ```ts
- * import { load } from '@fingerly/react-native'
+ * import { ConsentState, load } from '@fingerly/react-native'
  *
  * const fingerly = await load({ apiKey: 'fly_pk_production_…' })
  * // From the consent tool, once the user has agreed (or another lawful basis applies).
- * fingerly.setConsent('granted')
+ * fingerly.setConsent(ConsentState.Granted)
  * const { requestId } = await fingerly.identify({ tag: 'checkout' })
  *
  * // Send requestId to your backend and make the decision there.
@@ -34,11 +34,11 @@
 
 import { NativeModules, Platform } from 'react-native'
 
+import { ConsentState, SdkPlatform } from '@fingerly/types'
 import type {
   MobileFingerlyOptions,
   MobileIdentifyOptions,
   NativeIdentifyResult,
-  SdkPlatform,
   SignalReport,
 } from '@fingerly/types'
 
@@ -99,14 +99,6 @@ const MISSING_NATIVE_MODULE =
   'app — this package cannot ' +
   'collect anything without it, and collecting a subset from JavaScript would ' +
   'report a compromised device as clean.'
-
-/**
- * Whether the user has agreed to be identified.
- *
- * The same three states, spelled the same way, as `@fingerly/core` and the
- * native SDKs.
- */
-export type ConsentState = 'granted' | 'pending' | 'denied'
 
 export interface FingerlyOptions extends MobileFingerlyOptions {
   /**
@@ -196,7 +188,7 @@ export class ConsentError extends FingerlyError {
 
 const CONSENT_REQUIRED = 'consent_required'
 
-const CONSENT_STATES: readonly ConsentState[] = ['granted', 'pending', 'denied']
+const CONSENT_STATES: readonly ConsentState[] = Object.values(ConsentState)
 
 function isConsentState(value: unknown): value is ConsentState {
   return CONSENT_STATES.includes(value as ConsentState)
@@ -248,7 +240,7 @@ function refusedConsent(record: Record<string, unknown> | undefined, message: st
   if (isConsentState(fromUserInfo)) return fromUserInfo
 
   const fromMessage = /\(consent is (\w+)\)/.exec(message)?.[1]
-  return isConsentState(fromMessage) ? fromMessage : 'pending'
+  return isConsentState(fromMessage) ? fromMessage : ConsentState.Pending
 }
 
 /**
@@ -258,7 +250,7 @@ function refusedConsent(record: Record<string, unknown> | undefined, message: st
  * keeps one client per process: every `FingerlyClient` here talks to it, and a
  * second `load` changes the state for all of them.
  */
-let currentConsent: ConsentState = 'pending'
+let currentConsent: ConsentState = ConsentState.Pending
 
 function fingerlyError(error: unknown): FingerlyError {
   if (error instanceof FingerlyError) return error
@@ -324,7 +316,7 @@ async function invokeNative(operation: () => Promise<string>): Promise<string> {
  * See `models.RiskPlatformFor` on the server.
  */
 function platformName(): SdkPlatform {
-  return Platform.OS === 'android' ? 'react-native-android' : 'react-native-ios'
+  return Platform.OS === 'android' ? SdkPlatform.ReactNativeAndroid : SdkPlatform.ReactNativeIos
 }
 
 /**
@@ -504,7 +496,7 @@ export class FingerlyClient {
  * `pending` when there is none, replaces whatever the native SDK held before.
  */
 export async function load(options: FingerlyOptions): Promise<FingerlyClient> {
-  const consent = options.consent ?? 'pending'
+  const consent = options.consent ?? ConsentState.Pending
   assertConsentState(consent)
   const playIntegrity = options.playIntegrityCloudProjectNumber
   assertCloudProjectNumber(playIntegrity)
@@ -565,11 +557,25 @@ export function nativeVersion(): string | undefined {
   return nativeModule()?.sdkVersion
 }
 
+// Runtime constants for the fixed values the API returns and the bridge
+// accepts, the same objects `@fingerly/core` and `@fingerly/web-js` export, so
+// `result.suspectLevel === SuspectLevel.High` reads the same in every
+// JavaScript SDK. Each is also the type of its values. They are names for
+// strings, not a filter: the bridge hands on the server's values as they came,
+// so one a newer server adds still reaches the app unchanged.
+export {
+  Confidence,
+  ConsentState,
+  EventState,
+  SdkPlatform,
+  Signal,
+  SuspectLevel,
+} from '@fingerly/types'
+
 // Re-exported from `@fingerly/types` (`v: 3` contract) so an app that only
 // installs `@fingerly/react-native` can name the result and risk signal
 // shapes directly.
 export type {
-  Confidence,
   IdentifyResult,
   IdentifySubmission,
   IdentifyTrigger,
@@ -580,9 +586,8 @@ export type {
   MobileIdentifyOptions,
   NativeIdentifyResult,
   RiskSignal,
-  SdkPlatform,
+  SignalName,
   SignalOutcome,
   SignalReport,
   SignalStatus,
-  SuspectLevel,
 } from '@fingerly/types'
