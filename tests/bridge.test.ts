@@ -876,7 +876,11 @@ describe('deleteStoredIdentity (GDPR / privacy erasure)', () => {
 describe('version, native coordinates, and bridge selector parity (0.3.0)', () => {
   it('aligns package.json, @fingerly/types, podspec, fingerly-binary.json, and android/build.gradle at 0.3.0', () => {
     const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
-    const typesPkg = JSON.parse(readFileSync(new URL('../packages/types/package.json', import.meta.url), 'utf8'))
+    // The @fingerly/types this package resolves: packages/types in this
+    // repository, client/web/types when it builds inside the sdks workspace.
+    const typesPkg = JSON.parse(
+      readFileSync(new URL('../node_modules/@fingerly/types/package.json', import.meta.url), 'utf8'),
+    )
     const binary = JSON.parse(readFileSync(new URL('../ios/fingerly-binary.json', import.meta.url), 'utf8'))
     const podspec = readFileSync(new URL('../fingerly-react-native.podspec', import.meta.url), 'utf8')
     const gradle = readFileSync(new URL('../android/build.gradle', import.meta.url), 'utf8')
