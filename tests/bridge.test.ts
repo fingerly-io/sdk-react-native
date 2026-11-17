@@ -873,7 +873,7 @@ describe('deleteStoredIdentity (GDPR / privacy erasure)', () => {
 })
 
 describe('version, native coordinates, and bridge selector parity (0.3.0)', () => {
-  it('aligns package.json, @fingerly/types, podspec, fingerly-binary.json, and android/build.gradle at 0.3.0', () => {
+  it('aligns package.json, podspec, fingerly-binary.json, and android/build.gradle at 0.3.0', () => {
     const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
     // The @fingerly/types this package resolves: packages/types in this
     // repository, client/web/types when it builds inside the sdks workspace.
@@ -887,7 +887,9 @@ describe('version, native coordinates, and bridge selector parity (0.3.0)', () =
     const fetchScript = readFileSync(new URL('../ios/fetch-fingerly-xcframework.sh', import.meta.url), 'utf8')
 
     expect(pkg.version).toBe('0.3.0')
-    expect(typesPkg.version).toBe('0.3.0')
+    // The contract types may move ahead of the bridge; it needs the v3 types from 0.3.0 on.
+    const [typesMajor, typesMinor] = typesPkg.version.split('.').map(Number)
+    expect(typesMajor === 0 && (typesMinor ?? 0) >= 3).toBe(true)
     expect(podspec).toMatch(/s\.version\s*=\s*'0\.3\.0'/)
     expect(binary).toEqual({
       version: '0.3.0',
