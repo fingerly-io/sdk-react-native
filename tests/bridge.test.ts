@@ -62,7 +62,7 @@ function installNative() {
   const collect = vi.fn(async () => JSON.stringify({ schema: 2, sources: {} }))
   const setConsent = vi.fn()
 
-  NativeModules.Fingerly = { configure, setConsent, identify, collect, sdkVersion: '0.3.0' }
+  NativeModules.Fingerly = { configure, setConsent, identify, collect, sdkVersion: '0.4.0' }
   return { configure, setConsent, identify, collect }
 }
 
@@ -108,7 +108,7 @@ function installGatedNative(shape: 'ios' | 'android' = 'ios') {
     return JSON.stringify({ schema: 2, sources: {} })
   })
 
-  NativeModules.Fingerly = { configure, setConsent, identify, collect, sdkVersion: '0.3.0' }
+  NativeModules.Fingerly = { configure, setConsent, identify, collect, sdkVersion: '0.4.0' }
   return { configure, setConsent, identify, collect }
 }
 
@@ -373,7 +373,7 @@ describe('identify and v3 Option B contract', () => {
         }),
       ),
       collect: vi.fn(),
-      sdkVersion: '0.3.0',
+      sdkVersion: '0.4.0',
     }
 
     const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
@@ -483,7 +483,7 @@ describe('identify and v3 Option B contract', () => {
         }),
       ),
       collect: vi.fn(),
-      sdkVersion: '0.3.0',
+      sdkVersion: '0.4.0',
     }
     const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
     const result = await fingerly.identify()
@@ -513,7 +513,7 @@ describe('identify and v3 Option B contract', () => {
       configure: vi.fn(),
       identify: vi.fn(async () => JSON.stringify(answer)),
       collect: vi.fn(),
-      sdkVersion: '0.3.0',
+      sdkVersion: '0.4.0',
     }
     const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
 
@@ -738,7 +738,7 @@ describe('native failures and error codes', () => {
         throw nativeError
       }),
       collect: vi.fn(async () => JSON.stringify({ schema: 2, sources: {} })),
-      sdkVersion: '0.3.0',
+      sdkVersion: '0.4.0',
     }
 
     const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
@@ -762,7 +762,7 @@ describe('native failures and error codes', () => {
         throw nativeError
       }),
       collect: vi.fn(),
-      sdkVersion: '0.3.0',
+      sdkVersion: '0.4.0',
     }
 
     const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
@@ -783,7 +783,7 @@ describe('native failures and error codes', () => {
           throw nativeError
         }),
         collect: vi.fn(),
-        sdkVersion: '0.3.0',
+        sdkVersion: '0.4.0',
       }
       const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
       const error = await fingerly.identify().catch((caught: unknown) => caught)
@@ -800,7 +800,7 @@ describe('native failures and error codes', () => {
       collect: vi.fn(async () => {
         throw nativeError
       }),
-      sdkVersion: '0.3.0',
+      sdkVersion: '0.4.0',
     }
 
     const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
@@ -820,7 +820,7 @@ describe('unreadable native answers', () => {
         configure: vi.fn(),
         identify: vi.fn(async () => raw),
         collect: vi.fn(async () => raw),
-        sdkVersion: '0.3.0',
+        sdkVersion: '0.4.0',
       }
       const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
       await expect(fingerly.identify(), raw).rejects.toBeInstanceOf(FingerlyError)
@@ -841,7 +841,7 @@ describe('unreadable native answers', () => {
         }),
       ),
       collect: vi.fn(),
-      sdkVersion: '0.3.0',
+      sdkVersion: '0.4.0',
     }
     const result = await (await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })).identify()
     expect(result.requestId).toBe('req_1')
@@ -946,7 +946,7 @@ describe('consent', () => {
         throw Object.assign(new Error('refused'), { code: 'consent_required' })
       }),
       collect: vi.fn(),
-      sdkVersion: '0.3.0',
+      sdkVersion: '0.4.0',
     }
     const fingerly = await load({ apiKey: 'fly_pk_development_test' })
 
@@ -991,7 +991,7 @@ describe('the endpoint', () => {
 describe('nativeVersion', () => {
   it('reports the version of the SDK that actually did the collecting', async () => {
     installNative()
-    expect(nativeVersion()).toBe('0.3.0')
+    expect(nativeVersion()).toBe('0.4.0')
   })
 
   it('is undefined rather than throwing when there is no native module', () => {
@@ -1071,15 +1071,15 @@ describe('version, native coordinates, and bridge selector parity (0.3.0)', () =
     expect(typesMajor === 0 && (typesMinor ?? 0) >= 4).toBe(true)
     expect(podspec).toMatch(/s\.version\s*=\s*'0\.3\.0'/)
     expect(binary).toEqual({
-      version: '0.3.0',
-      url: 'https://maven.fingerly.io/ios/Fingerly-0.3.0.xcframework.zip',
-      sha256: 'b3288cc4539b6c5b8bae226854a586473b2457489e69b2ac1f26e9f84f6add27',
+      version: '0.4.0',
+      url: 'https://maven.fingerly.io/ios/Fingerly-0.4.0.xcframework.zip',
+      sha256: '962dcded8374e162a095c9373d7044e66532a327a002889347c547868cc64460',
       team_id: 'XGXX88HRR5',
     })
     expect(fetchScript).toContain('FINGERLY_XCFRAMEWORK_PATH')
     expect(fetchScript).toContain('anchor apple generic and certificate leaf[subject.OU]')
     expect(gradle).toContain('mavenLocal()')
-    expect(gradle).toContain("implementation 'io.fingerly:fingerly:0.3.0'")
+    expect(gradle).toContain("implementation 'io.fingerly:fingerly:0.4.0'")
     expect(gradle).not.toMatch(/^\s*(implementation|api)\s+['"]io\.fingerly:fingerly-(app-checks|play-integrity)/m)
     expect(manifest.replace(/<!--[\s\S]*?-->/g, '')).not.toContain('<queries')
   })
