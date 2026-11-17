@@ -42,7 +42,20 @@ final class FingerlyModule: NSObject {
 
     /// `consent` is always sent by `src/index.ts`, `pending` when the app
     /// passed none. The native bridge reads anything it does not recognise as
-    /// `pending`.
+    /// `pending`. `playIntegrityCloudProjectNumber` is Android-only and safely
+    /// ignored on iOS.
+    @objc(configure:endpoint:platform:consent:playIntegrityCloudProjectNumber:)
+    func configure(
+        apiKey: String,
+        endpoint: String,
+        platform: String,
+        consent: String,
+        playIntegrityCloudProjectNumber: NSNumber
+    ) {
+        _ = playIntegrityCloudProjectNumber
+        FingerlyBridge.configure(apiKey: apiKey, endpoint: endpoint, platform: platform, consent: consent)
+    }
+
     @objc(configure:endpoint:platform:consent:)
     func configure(apiKey: String, endpoint: String, platform: String, consent: String) {
         FingerlyBridge.configure(apiKey: apiKey, endpoint: endpoint, platform: platform, consent: consent)
@@ -83,10 +96,13 @@ final class FingerlyModule: NSObject {
         }
     }
 
-    /// Deletes the install record, for a user's erasure or account deletion.
+    /// Atomically deletes the local `install_id` and App Attest key state
+    /// stored under `Application Support/io.fingerly.sdk/`.
     ///
-    /// Resolves with nothing once no record remains; a keychain refusal
-    /// rejects with `delete_failed`, the code the Android module uses too.
+    /// Strictly for user-initiated GDPR / privacy erasure requests ("Delete My
+    /// Data" or account erasure), never for routine logout or session rotation.
+    /// Resolves with nothing once no stored identity remains; a filesystem
+    /// failure rejects with `delete_failed`, matching the Android module.
     @objc(deleteStoredIdentity:rejecter:)
     func deleteStoredIdentity(
         resolve: @escaping RCTPromiseResolveBlock,

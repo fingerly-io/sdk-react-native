@@ -1,17 +1,22 @@
 /**
- * The bridge, which is almost entirely a contract and almost not at all logic.
- *
- * The test worth having here is the platform name. It is one string, it is
- * assembled in this package, and getting it wrong is invisible: the submission
- * succeeds, the event is stored, and the server scores an iPhone against
- * *browser* weights — where `jailbreak` and `simulator` are not signals at all
- * and everything the native SDK collected is worth zero. Nothing fails, and a
- * customer finds out when a jailbroken device is never flagged.
+ * Contract and unit suite for `@fingerly/react-native` (`0.3.0`, `v: 3`).
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest'
 
 import { NativeModules, Platform } from './stub-react-native.js'
+
+import type {
+  FingerlyConfig,
+  FingerlyOptions,
+  IdentifyOptions,
+  IdentifyResult,
+  NativeIdentifyResult,
+  RiskSignal,
+  SignalReport,
+  SuspectLevel,
+} from '../src/index.js'
 
 // Imported after the stub so the module under test binds to the same objects.
 const { ConsentError, FingerlyError, deleteStoredIdentity, load, nativeVersion } = await import('../src/index.js')
@@ -27,32 +32,26 @@ function installNative() {
       visitorConfidence: 93,
       identifiable: true,
       duplicate: false,
-      state: 'scored',
+      state: 'enriched',
       reason: '',
       suspectScore: 41,
-      suspectLevel: 'medium',
+      suspectLevel: 'high',
       triggers: [
-        { signal: 'patched-natives', group: 'automation', weight: 22, confidence: 'high', reason: '' },
+        { signal: 'tampering', group: 'integrity', weight: 22, confidence: 'high', reason: '' },
       ],
       verdicts: { jailbreak: { value: false, confidence: 'low', reasons: [] } },
-      report: { schema: 1, sources: {} },
+      report: { schema: 2, sources: {} },
     }),
   )
-  const collect = vi.fn(async () => JSON.stringify({ schema: 1, sources: {} }))
+  const collect = vi.fn(async () => JSON.stringify({ schema: 2, sources: {} }))
   const setConsent = vi.fn()
 
-  NativeModules.Fingerly = { configure, setConsent, identify, collect, sdkVersion: '0.1.0' }
+  NativeModules.Fingerly = { configure, setConsent, identify, collect, sdkVersion: '0.3.0' }
   return { configure, setConsent, identify, collect }
 }
 
 /**
  * A native module that refuses the way both native bridges do.
- *
- * It keeps its own consent, exactly as `FingerlyBridge` does, and rejects
- * `identify` and `collect` with `consent_required` until that consent is
- * `granted`. `shape` picks which platform's rejection to imitate: iOS passes
- * the NSError through, so its `userInfo.state` arrives; Android sends a code
- * and a message only.
  */
 function installGatedNative(shape: 'ios' | 'android' = 'ios') {
   let consent = 'pending'
@@ -67,22 +66,33 @@ function installGatedNative(shape: 'ios' | 'android' = 'ios') {
       : Object.assign(new Error(message), { code: 'consent_required', userInfo: null })
   }
 
-  const configure = vi.fn((_apiKey: string, _endpoint: string, _platform: string, state: string) => {
-    consent = state
-  })
+  const configure = vi.fn(
+    (_apiKey: string, _endpoint: string, _platform: string, state: string, _projectNumber: number) => {
+      consent = state
+    },
+  )
   const setConsent = vi.fn((state: string) => {
     consent = state
   })
   const identify = vi.fn(async () => {
     if (consent !== 'granted') throw refusal()
-    return JSON.stringify({ requestId: 'req_after_consent', report: { schema: 1, sources: {} } })
+    return JSON.stringify({
+      requestId: 'req_after_consent',
+      visitorId: 'vis_after_consent',
+      visitorIsNew: true,
+      visitorConfidence: 0,
+      identifiable: true,
+      duplicate: false,
+      state: 'enriched',
+      report: { schema: 2, sources: {} },
+    })
   })
   const collect = vi.fn(async () => {
     if (consent !== 'granted') throw refusal()
-    return JSON.stringify({ schema: 1, sources: {} })
+    return JSON.stringify({ schema: 2, sources: {} })
   })
 
-  NativeModules.Fingerly = { configure, setConsent, identify, collect, sdkVersion: '0.1.0' }
+  NativeModules.Fingerly = { configure, setConsent, identify, collect, sdkVersion: '0.3.0' }
   return { configure, setConsent, identify, collect }
 }
 
@@ -96,7 +106,7 @@ describe('the platform name', () => {
     const { configure } = installNative()
     await load({ apiKey: 'fly_pk_development_test' })
 
-    expect(configure).toHaveBeenCalledWith('fly_pk_development_test', '', 'react-native-ios', 'pending')
+    expect(configure).toHaveBeenCalledWith('fly_pk_development_test', '', 'react-native-ios', 'pending', 0)
   })
 
   it('names the host as well as the toolkit on Android', async () => {
@@ -114,39 +124,55 @@ describe('the platform name', () => {
       await load({ apiKey: 'fly_pk_development_test' })
 
       const platform = configure.mock.calls[0]?.[2] as string
-      // `models.RiskPlatformFor` matches "android" first, then "ios", and falls
-      // back to the web profile when it finds neither.
-      expect(platform === 'react-native' || platform === 'flutter').toBe(false)
+      expect(platform === 'react-native' || platform === 'flutter' || platform === 'lynx').toBe(false)
       expect(/ios|android/.test(platform)).toBe(true)
     }
   })
 })
 
-describe('Play Integrity', () => {
-  it('hands the project number to the Android module', async () => {
+describe('Play Integrity and FingerlyConfig', () => {
+  it('hands playIntegrityCloudProjectNumber to the Android module', async () => {
     Platform.OS = 'android'
+    const config: FingerlyConfig = {
+      apiKey: 'fly_pk_development_test',
+      playIntegrityCloudProjectNumber: 123456789012,
+    }
     const { configure } = installNative()
-    await load({ apiKey: 'fly_pk_development_test', playIntegrityCloudProjectNumber: 123456789012 })
+    await load(config)
 
-    expect(configure).toHaveBeenCalledWith('fly_pk_development_test', '', 'react-native-android', 'pending', 123456789012)
+    expect(configure).toHaveBeenCalledWith(
+      'fly_pk_development_test',
+      '',
+      'react-native-android',
+      'pending',
+      123456789012,
+    )
   })
 
-  it('keeps the iOS call at four arguments, which the iOS module requires', async () => {
+  it('hands playIntegrityCloudProjectNumber across the iOS bridge where FingerlyModule.swift safely ignores it', async () => {
     Platform.OS = 'ios'
     const { configure } = installNative()
     await load({ apiKey: 'fly_pk_development_test', playIntegrityCloudProjectNumber: 123456789012 })
 
-    expect(configure.mock.calls[0]).toEqual(['fly_pk_development_test', '', 'react-native-ios', 'pending'])
+    expect(configure).toHaveBeenCalledWith(
+      'fly_pk_development_test',
+      '',
+      'react-native-ios',
+      'pending',
+      123456789012,
+    )
   })
 
-  it('refuses a value that is not a project number before configuring anything', async () => {
-    Platform.OS = 'android'
-    for (const bad of [0, -5, 1.5, Number.NaN, '123456789012']) {
-      const { configure } = installNative()
-      await expect(
-        load({ apiKey: 'fly_pk_development_test', playIntegrityCloudProjectNumber: bad as number }),
-      ).rejects.toThrow(TypeError)
-      expect(configure).not.toHaveBeenCalled()
+  it('refuses invalid playIntegrityCloudProjectNumber values on both platforms before configuring anything', async () => {
+    for (const os of ['ios', 'android'] as const) {
+      Platform.OS = os
+      for (const bad of [0, -5, 1.5, Number.NaN, Number.MAX_SAFE_INTEGER + 1, '123456789012']) {
+        const { configure } = installNative()
+        await expect(
+          load({ apiKey: 'fly_pk_development_test', playIntegrityCloudProjectNumber: bad as number }),
+        ).rejects.toThrow(TypeError)
+        expect(configure).not.toHaveBeenCalled()
+      }
     }
   })
 })
@@ -157,15 +183,11 @@ describe('when the native module is missing', () => {
   })
 
   it('explains why a JavaScript-only fallback is not offered', async () => {
-    // The message is load-bearing. The obvious "fix" for a missing native
-    // module is to collect what JavaScript can reach, and that would report a
-    // jailbroken, instrumented device as clean — which is worse than failing,
-    // because a customer would believe it.
     await expect(load({ apiKey: 'fly_pk_development_test' })).rejects.toThrow(/clean/)
   })
 })
 
-describe('identify', () => {
+describe('identify and v3 Option B contract', () => {
   it('passes the tag through and defaults to submitting', async () => {
     const { identify } = installNative()
     const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
@@ -204,13 +226,10 @@ describe('identify', () => {
     const result = await fingerly.identify()
 
     expect(result.requestId).toBe('req_123')
-    expect(result.report.schema).toBe(1)
+    expect(result.report.schema).toBe(2)
   })
 
-  it('carries the server\'s answer across the bridge', async () => {
-    // The bridge is a JSON string, so every field the native SDKs added has to
-    // survive a round trip through it. A field the native side sends and this
-    // side drops is invisible until an app reads undefined in production.
+  it("carries the server's answer across the bridge", async () => {
     installNative()
     const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
     const result = await fingerly.identify()
@@ -220,21 +239,92 @@ describe('identify', () => {
     expect(result.visitorConfidence).toBe(93)
     expect(result.identifiable).toBe(true)
     expect(result.duplicate).toBe(false)
-    expect(result.state).toBe('scored')
+    expect(result.state).toBe('enriched')
     expect(result.suspectScore).toBe(41)
-    expect(result.suspectLevel).toBe('medium')
+    expect(result.suspectLevel).toBe('high')
     expect(result).not.toHaveProperty('triggers')
+  })
+
+  it('enforces Option B empty visitorId and visitorIsNew: false when identifiable === false', async () => {
+    const { identify } = installNative()
+    identify.mockResolvedValue(
+      JSON.stringify({
+        requestId: 'req_unidentifiable',
+        visitorId: '',
+        visitorIsNew: false,
+        visitorConfidence: 0,
+        identifiable: false,
+        duplicate: false,
+        state: 'enriched',
+        suspectScore: 34,
+        suspectLevel: 'high',
+        report: { schema: 2, sources: {} },
+      }),
+    )
+    const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
+    const result = await fingerly.identify()
+
+    expect(result.identifiable).toBe(false)
+    expect(result.visitorId).toBe('')
+    expect(result.visitorIsNew).toBe(false)
+    expect(result.visitorConfidence).toBe(0)
+    expect(result.state).toBe('enriched')
+    expect(result.suspectScore).toBe(34)
+    expect(result.suspectLevel).toBe('high')
+  })
+
+  it('clamps stale or forged visitorId and visitorIsNew when identifiable === false or visitorId === ""', async () => {
+    const { identify } = installNative()
+    identify.mockResolvedValueOnce(
+      JSON.stringify({
+        requestId: 'req_forged_1',
+        visitorId: 'vis_should_not_exist',
+        visitorIsNew: true,
+        visitorConfidence: 0,
+        identifiable: false,
+        state: 'enriched',
+        report: { schema: 2, sources: {} },
+      }),
+    )
+    identify.mockResolvedValueOnce(
+      JSON.stringify({
+        requestId: 'req_forged_2',
+        visitorId: '',
+        visitorIsNew: true,
+        visitorConfidence: 0,
+        identifiable: true,
+        state: 'enriched',
+        report: { schema: 2, sources: {} },
+      }),
+    )
+
+    const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
+
+    const first = await fingerly.identify()
+    expect(first.identifiable).toBe(false)
+    expect(first.visitorId).toBe('')
+    expect(first.visitorIsNew).toBe(false)
+
+    const second = await fingerly.identify()
+    expect(second.visitorId).toBe('')
+    expect(second.visitorIsNew).toBe(false)
   })
 
   it('carries a score from an answer that has no signals', async () => {
     const { identify } = installNative()
     identify.mockResolvedValue(
-      JSON.stringify({ requestId: 'req_1', visitorId: 'vis_1', suspectScore: 41, suspectLevel: 'medium', report: { schema: 1, sources: {} } }),
+      JSON.stringify({
+        requestId: 'req_1',
+        visitorId: 'vis_1',
+        suspectScore: 18,
+        suspectLevel: 'medium',
+        report: { schema: 2, sources: {} },
+      }),
     )
     const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
     const result = await fingerly.identify()
 
-    expect(result.suspectScore).toBe(41)
+    expect(result.suspectScore).toBe(18)
     expect(result.suspectLevel).toBe('medium')
     expect(result).not.toHaveProperty('triggers')
   })
@@ -242,7 +332,7 @@ describe('identify', () => {
   it('reads an answer with neither score nor signals, the same as a hidden score', async () => {
     const { identify } = installNative()
     identify.mockResolvedValue(
-      JSON.stringify({ requestId: 'req_1', visitorId: 'vis_1', state: 'scored', report: { schema: 1, sources: {} } }),
+      JSON.stringify({ requestId: 'req_1', visitorId: 'vis_1', state: 'enriched', report: { schema: 2, sources: {} } }),
     )
     const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
     const result = await fingerly.identify()
@@ -255,10 +345,6 @@ describe('identify', () => {
   })
 
   it('keeps an unscored answer null rather than zero', async () => {
-    // Both native bridges send an explicit JSON null for suspectScore when
-    // nothing scored the submission. Null and 0 are different answers - 0 is
-    // "scored, nothing fired" - and collapsing them here would report a clean
-    // visitor for a check that never happened.
     NativeModules.Fingerly = {
       configure: vi.fn(),
       identify: vi.fn(async () =>
@@ -267,11 +353,11 @@ describe('identify', () => {
           visitorId: 'vis_1',
           suspectScore: null,
           suspectLevel: null,
-          report: { schema: 1, sources: {} },
+          report: { schema: 2, sources: {} },
         }),
       ),
       collect: vi.fn(),
-      sdkVersion: '0.1.0',
+      sdkVersion: '0.3.0',
     }
 
     const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
@@ -284,42 +370,73 @@ describe('identify', () => {
   })
 
   it.each([
-    ['Android writes null', { visitorIsNew: null, visitorConfidence: null, identifiable: null, duplicate: null, suspectScore: null, suspectLevel: null }],
+    [
+      'Android writes null',
+      {
+        visitorIsNew: null,
+        visitorConfidence: null,
+        identifiable: null,
+        duplicate: null,
+        suspectScore: null,
+        suspectLevel: null,
+      },
+    ],
     ['iOS leaves the key out', {}],
   ])('reads an answer the server did not give as null: %s', async (_label, unsaid) => {
     const { identify } = installNative()
     identify.mockResolvedValue(
-      JSON.stringify({ requestId: 'req_dup', visitorId: '', state: 'scored', report: { schema: 1, sources: {} }, ...unsaid }),
+      JSON.stringify({ requestId: 'req_dup', visitorId: '', state: 'unavailable', report: { schema: 2, sources: {} }, ...unsaid }),
     )
     const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
     const result = await fingerly.identify()
 
-    for (const field of ['visitorIsNew', 'visitorConfidence', 'identifiable', 'duplicate', 'suspectScore', 'suspectLevel'] as const) {
+    expect(result.visitorId).toBe('')
+    for (const field of [
+      'visitorIsNew',
+      'visitorConfidence',
+      'identifiable',
+      'duplicate',
+      'suspectScore',
+      'suspectLevel',
+    ] as const) {
       expect(result[field]).toBeNull()
     }
   })
 
-  it('keeps a duplicate answer true with its visitor fields empty', async () => {
+  it('replays a duplicate verdict with its stored visitor and score fields', async () => {
     const { identify } = installNative()
     identify.mockResolvedValue(
-      JSON.stringify({ requestId: 'req_dup', visitorId: '', duplicate: true, state: 'scored', report: { schema: 1, sources: {} } }),
+      JSON.stringify({
+        requestId: 'req_dup',
+        visitorId: 'vis_replayed',
+        visitorIsNew: false,
+        visitorConfidence: 95,
+        identifiable: true,
+        duplicate: true,
+        state: 'enriched',
+        suspectScore: 0,
+        suspectLevel: 'low',
+        report: { schema: 2, sources: {} },
+      }),
     )
     const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
     const result = await fingerly.identify()
 
     expect(result.duplicate).toBe(true)
-    expect(result.visitorId).toBe('')
-    expect(result.visitorConfidence).toBeNull()
+    expect(result.visitorId).toBe('vis_replayed')
+    expect(result.visitorIsNew).toBe(false)
+    expect(result.visitorConfidence).toBe(95)
+    expect(result.suspectScore).toBe(0)
+    expect(result.suspectLevel).toBe('low')
   })
 
   it('never hands the app a signal name or weight, even when the native side still sends them', async () => {
-    // installNative answers like an older native build, with a trigger in it.
     installNative()
     const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
     const result = await fingerly.identify()
 
     expect(result).not.toHaveProperty('triggers')
-    expect(JSON.stringify(result)).not.toContain('patched-natives')
+    expect(JSON.stringify(result)).not.toContain('tampering')
     expect(JSON.stringify(result)).not.toContain('weight')
   })
 
@@ -341,15 +458,22 @@ describe('identify', () => {
     NativeModules.Fingerly = {
       configure: vi.fn(),
       identify: vi.fn(async () =>
-        JSON.stringify({ requestId: 'req_1', suspectScore: 12, triggers, futureMember: { nested: true }, report: { schema: 1, sources: {} } }),
+        JSON.stringify({
+          requestId: 'req_1',
+          suspectScore: 12,
+          triggers,
+          futureMember: { nested: true },
+          report: { schema: 2, sources: {} },
+        }),
       ),
       collect: vi.fn(),
-      sdkVersion: '0.1.0',
+      sdkVersion: '0.3.0',
     }
     const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
     const result = await fingerly.identify()
 
     expect(result.requestId).toBe('req_1')
+    expect(result.visitorId).toBe('')
     expect(result.suspectScore).toBe(12)
     expect(result).not.toHaveProperty('triggers')
     expect(result).not.toHaveProperty('futureMember')
@@ -357,12 +481,10 @@ describe('identify', () => {
   })
 
   it('returns only the raw report for submit: false', async () => {
-    // Forged on purpose: an answer full of server fields and a local conclusion
-    // for a check nobody sent. None of it may survive.
     installNative()
     const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
 
-    await expect(fingerly.identify({ submit: false })).resolves.toEqual({ report: { schema: 1, sources: {} } })
+    await expect(fingerly.identify({ submit: false })).resolves.toEqual({ report: { schema: 2, sources: {} } })
   })
 
   it.each([
@@ -375,7 +497,7 @@ describe('identify', () => {
       configure: vi.fn(),
       identify: vi.fn(async () => JSON.stringify(answer)),
       collect: vi.fn(),
-      sdkVersion: '0.1.0',
+      sdkVersion: '0.3.0',
     }
     const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
 
@@ -383,32 +505,77 @@ describe('identify', () => {
   })
 })
 
-describe('native failures', () => {
-  it('preserves an HTTP status without exposing platform-specific error shapes', async () => {
-    const nativeError = Object.assign(new Error('organisation disabled'), { code: '402' })
+describe('v3 TypeScript contract re-exports', () => {
+  it('syncs IdentifyResult, NativeIdentifyResult, FingerlyConfig, and RiskSignal with @fingerly/types', () => {
+    expectTypeOf<FingerlyConfig>().toEqualTypeOf<FingerlyOptions>()
+    expectTypeOf<FingerlyConfig['playIntegrityCloudProjectNumber']>().toEqualTypeOf<number | undefined>()
+    expectTypeOf<IdentifyOptions>().not.toHaveProperty('tiers')
+    expectTypeOf<SignalReport>().not.toHaveProperty('tiers')
+    expectTypeOf<IdentifyResult>().not.toHaveProperty('deferred')
+    expectTypeOf<IdentifyResult>().not.toHaveProperty('deferredToken')
+    expectTypeOf<IdentifyResult>().not.toHaveProperty('verdicts')
+    expectTypeOf<IdentifyResult['visitorId']>().toEqualTypeOf<string>()
+    expectTypeOf<IdentifyResult['visitorIsNew']>().toEqualTypeOf<boolean>()
+    expectTypeOf<NativeIdentifyResult['visitorId']>().toEqualTypeOf<string>()
+    expectTypeOf<NativeIdentifyResult['suspectLevel']>().toEqualTypeOf<SuspectLevel | null>()
+
+    const signals = [
+      'attestation_failed',
+      'attestation_missing',
+      'attestation_downgrade',
+      'app_attest_key_churn',
+      'play_device_integrity_failed',
+      'play_app_unrecognized',
+      'device_inconsistent',
+      'report_incomplete',
+      'probe_errors',
+      'tampering',
+      'custom_root_ca',
+      'secondary_user_profile',
+      'frida',
+      'mitm_attack',
+      'root_apps',
+      'jailbreak',
+      'app_cloner',
+      'emulator',
+      'simulator',
+      'embedded_web_view',
+    ] as const satisfies readonly RiskSignal[]
+
+    expect(signals.length).toBeGreaterThan(10)
+  })
+})
+
+describe('native failures and error codes', () => {
+  it.each([
+    [401, 'invalid sdk key'],
+    [402, 'organisation disabled'],
+    [403, 'attestation_key_unknown'],
+    [503, 'service unavailable'],
+  ])('preserves HTTP status %i without exposing platform-specific error shapes', async (status, message) => {
+    const nativeError = Object.assign(new Error(message), { code: String(status) })
     NativeModules.Fingerly = {
       configure: vi.fn(),
       identify: vi.fn(async () => {
         throw nativeError
       }),
-      collect: vi.fn(async () => JSON.stringify({ schema: 1, sources: {} })),
-      sdkVersion: '0.1.0',
+      collect: vi.fn(async () => JSON.stringify({ schema: 2, sources: {} })),
+      sdkVersion: '0.3.0',
     }
 
     const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
 
     await expect(fingerly.identify()).rejects.toMatchObject({
       name: 'FingerlyError',
-      message: 'organisation disabled',
-      status: 402,
+      message,
+      status,
     })
   })
 
-  it('carries the iOS bridge retryAfterMs on the error', async () => {
-    // What RCTPromiseRejectBlock delivers for the iOS bridge's NSError.
+  it.each(['ios', 'android'] as const)('carries retryAfterMs on 429 errors across %s', async (os) => {
+    Platform.OS = os
     const nativeError = Object.assign(new Error('Too many requests'), {
       code: '429',
-      domain: 'io.fingerly.sdk',
       userInfo: { retryable: true, retryAfterMs: 3000 },
     })
     NativeModules.Fingerly = {
@@ -417,7 +584,7 @@ describe('native failures', () => {
         throw nativeError
       }),
       collect: vi.fn(),
-      sdkVersion: '0.1.0',
+      sdkVersion: '0.3.0',
     }
 
     const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
@@ -438,7 +605,7 @@ describe('native failures', () => {
           throw nativeError
         }),
         collect: vi.fn(),
-        sdkVersion: '0.1.0',
+        sdkVersion: '0.3.0',
       }
       const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
       const error = await fingerly.identify().catch((caught: unknown) => caught)
@@ -447,15 +614,15 @@ describe('native failures', () => {
     }
   })
 
-  it('does not mistake a native sentinel code for an HTTP status', async () => {
-    const nativeError = Object.assign(new Error('no report'), { code: '-1' })
+  it.each(['-1', 'transport', 'collection'])('does not mistake non-HTTP code %s for an HTTP status', async (code) => {
+    const nativeError = Object.assign(new Error('no report'), { code })
     NativeModules.Fingerly = {
       configure: vi.fn(),
       identify: vi.fn(async () => JSON.stringify({})),
       collect: vi.fn(async () => {
         throw nativeError
       }),
-      sdkVersion: '0.1.0',
+      sdkVersion: '0.3.0',
     }
 
     const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
@@ -475,7 +642,7 @@ describe('unreadable native answers', () => {
         configure: vi.fn(),
         identify: vi.fn(async () => raw),
         collect: vi.fn(async () => raw),
-        sdkVersion: '0.1.0',
+        sdkVersion: '0.3.0',
       }
       const fingerly = await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })
       await expect(fingerly.identify(), raw).rejects.toBeInstanceOf(FingerlyError)
@@ -491,12 +658,12 @@ describe('unreadable native answers', () => {
           requestId: 'req_1',
           state: 'unavailable',
           reason: 'ip-database-not-loaded',
-          report: { schema: 1, sources: {} },
+          report: { schema: 2, sources: {} },
           somethingNew: { a: 1 },
         }),
       ),
       collect: vi.fn(),
-      sdkVersion: '0.1.0',
+      sdkVersion: '0.3.0',
     }
     const result = await (await load({ apiKey: 'fly_pk_development_test', consent: 'granted' })).identify()
     expect(result.requestId).toBe('req_1')
@@ -519,8 +686,6 @@ describe('consent', () => {
       state: 'pending',
     })
     await expect(fingerly.collect()).rejects.toBeInstanceOf(ConsentError)
-    // Refused by the native SDK before it collected or sent anything; nothing
-    // came back to resolve with.
     expect(identify).toHaveBeenCalledOnce()
     expect(collect).toHaveBeenCalledOnce()
   })
@@ -529,7 +694,7 @@ describe('consent', () => {
     const { configure } = installNative()
     const fingerly = await load({ apiKey: 'fly_pk_development_test', consent })
 
-    expect(configure).toHaveBeenCalledWith('fly_pk_development_test', '', 'react-native-ios', consent)
+    expect(configure).toHaveBeenCalledWith('fly_pk_development_test', '', 'react-native-ios', consent, 0)
     expect(fingerly.consent).toBe(consent)
   })
 
@@ -603,7 +768,7 @@ describe('consent', () => {
         throw Object.assign(new Error('refused'), { code: 'consent_required' })
       }),
       collect: vi.fn(),
-      sdkVersion: '0.1.0',
+      sdkVersion: '0.3.0',
     }
     const fingerly = await load({ apiKey: 'fly_pk_development_test' })
 
@@ -628,9 +793,6 @@ describe('the endpoint', () => {
     const { configure } = installNative()
     await load({ apiKey: 'fly_pk_development_test' })
 
-    // Not `undefined`: the bridge signature is a non-null string, and the
-    // native side treats empty as "use the default". Sending undefined across
-    // the bridge would arrive as null and fail the argument check.
     expect(configure.mock.calls[0]?.[1]).toBe('')
   })
 
@@ -638,14 +800,20 @@ describe('the endpoint', () => {
     const { configure } = installNative()
     await load({ apiKey: 'fly_pk_development_test', endpoint: 'https://api.example.com' })
 
-    expect(configure).toHaveBeenCalledWith('fly_pk_development_test', 'https://api.example.com', 'react-native-ios', 'pending')
+    expect(configure).toHaveBeenCalledWith(
+      'fly_pk_development_test',
+      'https://api.example.com',
+      'react-native-ios',
+      'pending',
+      0,
+    )
   })
 })
 
 describe('nativeVersion', () => {
   it('reports the version of the SDK that actually did the collecting', async () => {
     installNative()
-    expect(nativeVersion()).toBe('0.1.0')
+    expect(nativeVersion()).toBe('0.3.0')
   })
 
   it('is undefined rather than throwing when there is no native module', () => {
@@ -653,7 +821,7 @@ describe('nativeVersion', () => {
   })
 })
 
-describe('deleteStoredIdentity', () => {
+describe('deleteStoredIdentity (GDPR / privacy erasure)', () => {
   it('asks the native SDK, without load or consent', async () => {
     const { configure, setConsent } = installNative()
     const remove = vi.fn(async () => null)
@@ -672,24 +840,79 @@ describe('deleteStoredIdentity', () => {
     await expect(deleteStoredIdentity()).rejects.toThrow(/not available in the native Fingerly SDK on ios/)
   })
 
-  it('surfaces a failed delete as a FingerlyError, as both native modules reject it', async () => {
-    Platform.OS = 'android'
-    installNative()
-    ;(NativeModules.Fingerly as Record<string, unknown>).deleteStoredIdentity = vi.fn(async () => {
-      throw Object.assign(new Error('Fingerly could not delete its stored install record'), {
-        code: 'delete_failed',
+  it.each(['ios', 'android'] as const)(
+    'surfaces a failed delete on %s as a FingerlyError with no HTTP status',
+    async (os) => {
+      Platform.OS = os
+      installNative()
+      ;(NativeModules.Fingerly as Record<string, unknown>).deleteStoredIdentity = vi.fn(async () => {
+        throw Object.assign(new Error('Fingerly could not delete its stored install record'), {
+          code: 'delete_failed',
+          userInfo: os === 'ios' ? { code: 'delete_failed', status: 13 } : null,
+        })
       })
-    })
 
-    const error = await deleteStoredIdentity().catch((e: unknown) => e)
-    expect(error).toBeInstanceOf(FingerlyError)
-    expect((error as InstanceType<typeof FingerlyError>).message).toBe(
-      'Fingerly could not delete its stored install record',
-    )
-    expect((error as InstanceType<typeof FingerlyError>).status).toBeUndefined()
-  })
+      const error = await deleteStoredIdentity().catch((e: unknown) => e)
+      expect(error).toBeInstanceOf(FingerlyError)
+      expect((error as InstanceType<typeof FingerlyError>).message).toBe(
+        'Fingerly could not delete its stored install record',
+      )
+      expect((error as InstanceType<typeof FingerlyError>).status).toBeUndefined()
+    },
+  )
 
   it('reports the missing native module rather than throwing on undefined', async () => {
     await expect(deleteStoredIdentity()).rejects.toThrow(/could not find its native module/)
+  })
+
+  it('documents GDPR-only erasure of install_id and hardware attestation key state', () => {
+    const source = readFileSync(new URL('../src/index.ts', import.meta.url), 'utf8')
+    expect(source).toMatch(/GDPR \/ privacy erasure/i)
+    expect(source).toContain('install_id')
+    expect(source).toMatch(/attestation key state/i)
+  })
+})
+
+describe('version, native coordinates, and bridge selector parity (0.3.0)', () => {
+  it('aligns package.json, @fingerly/types, podspec, fingerly-binary.json, and android/build.gradle at 0.3.0', () => {
+    const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+    const typesPkg = JSON.parse(readFileSync(new URL('../packages/types/package.json', import.meta.url), 'utf8'))
+    const binary = JSON.parse(readFileSync(new URL('../ios/fingerly-binary.json', import.meta.url), 'utf8'))
+    const podspec = readFileSync(new URL('../fingerly-react-native.podspec', import.meta.url), 'utf8')
+    const gradle = readFileSync(new URL('../android/build.gradle', import.meta.url), 'utf8')
+    const manifest = readFileSync(new URL('../android/src/main/AndroidManifest.xml', import.meta.url), 'utf8')
+    const fetchScript = readFileSync(new URL('../ios/fetch-fingerly-xcframework.sh', import.meta.url), 'utf8')
+
+    expect(pkg.version).toBe('0.3.0')
+    expect(typesPkg.version).toBe('0.3.0')
+    expect(podspec).toMatch(/s\.version\s*=\s*'0\.3\.0'/)
+    expect(binary).toEqual({
+      version: '0.3.0',
+      url: 'https://maven.fingerly.io/ios/Fingerly-0.3.0.xcframework.zip',
+      sha256: 'b3288cc4539b6c5b8bae226854a586473b2457489e69b2ac1f26e9f84f6add27',
+      team_id: 'XGXX88HRR5',
+    })
+    expect(fetchScript).toContain('FINGERLY_XCFRAMEWORK_PATH')
+    expect(fetchScript).toContain('anchor apple generic and certificate leaf[subject.OU]')
+    expect(gradle).toContain('mavenLocal()')
+    expect(gradle).toContain("implementation 'io.fingerly:fingerly:0.3.0'")
+    expect(gradle).not.toMatch(/^\s*(implementation|api)\s+['"]io\.fingerly:fingerly-(app-checks|play-integrity)/m)
+    expect(manifest.replace(/<!--[\s\S]*?-->/g, '')).not.toContain('<queries')
+  })
+
+  it('keeps Objective-C RCT_EXTERN_METHOD and Swift @objc selectors in exact agreement', () => {
+    const objc = readFileSync(new URL('../ios/FingerlyModule.m', import.meta.url), 'utf8')
+    const swift = readFileSync(new URL('../ios/FingerlyModule.swift', import.meta.url), 'utf8')
+
+    for (const selector of [
+      'configure:endpoint:platform:consent:playIntegrityCloudProjectNumber:',
+      'setConsent:',
+      'identify:submit:automatic:resolver:rejecter:',
+      'collect:rejecter:',
+      'deleteStoredIdentity:rejecter:',
+    ]) {
+      expect(swift).toContain(`@objc(${selector})`)
+    }
+    expect(objc).toContain('playIntegrityCloudProjectNumber:(nonnull NSNumber *)playIntegrityCloudProjectNumber')
   })
 })

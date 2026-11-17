@@ -1,13 +1,13 @@
 /**
- * @fingerly/react-native — the React Native SDK.
+ * @fingerly/react-native — the React Native SDK (`v: 3`).
  *
  * # This package collects nothing
  *
  * That is the design, not a limitation. Every signal worth having on a phone is
  * unreachable from JavaScript: `lstat` on `/var/jb`, the dyld image list, the
- * thread names Frida leaves behind, the `P_TRACED` flag, the DeviceCheck token
- * Apple signs, the TLS chain the app was actually served. A React Native bridge
- * can reach none of them.
+ * thread names Frida leaves behind, the `P_TRACED` flag, hardware App Attest /
+ * Android Keystore signing, the TLS chain the app was actually served. A React
+ * Native bridge can reach none of them.
  *
  * So an SDK that collected what it *could* reach from JavaScript would report a
  * jailbroken, instrumented device as clean — which is worse than reporting
@@ -16,8 +16,8 @@
  *
  * The consequence worth stating: the collection logic lives in one place per
  * platform, in Swift and in Kotlin, and improving it improves React Native,
- * Flutter and native apps at the same time rather than three times over. What
- * the signals mean is decided on the server, and nothing here reaches a
+ * Flutter, Lynx and native apps at the same time rather than four times over.
+ * What the signals mean is decided on the server, and nothing here reaches a
  * conclusion of its own.
  *
  * ```ts
@@ -45,23 +45,23 @@ import type {
 /**
  * The native module, as the bridge exposes it.
  *
- * Both methods answer with a JSON string rather than an object. React Native's
- * bridge serialises through a small set of types and Flutter's method channel
- * has its own codec, so marshalling the report into either by hand would mean
- * another mapping to keep in step with the wire format — and the wire format is
- * already JSON.
+ * Both collection methods answer with a JSON string rather than an object.
+ * React Native's bridge serialises through a small set of types and Flutter's
+ * method channel has its own codec, so marshalling the report into either by
+ * hand would mean another mapping to keep in step with the wire format — and
+ * the wire format is already JSON.
  */
 interface FingerlyNativeModule {
   /**
-   * The Android module takes a fifth argument, the Play Integrity project
-   * number (0 for none); the iOS module takes four. See [[load]].
+   * Both iOS and Android bridges accept five arguments (`0` when no Play
+   * Integrity project number was supplied; safely ignored on iOS). See [[load]].
    */
   configure(
     apiKey: string,
     endpoint: string,
     platform: string,
     consent: ConsentState,
-    playIntegrityCloudProjectNumber?: number,
+    playIntegrityCloudProjectNumber: number,
   ): void
   setConsent(state: ConsentState): void
   identify(tag: string | null, submit: boolean, automatic: boolean): Promise<string>
@@ -104,9 +104,7 @@ const MISSING_NATIVE_MODULE =
  * Whether the user has agreed to be identified.
  *
  * The same three states, spelled the same way, as `@fingerly/core` and the
- * native SDKs. Declared here rather than taken from `@fingerly/types` so this
- * bridge builds against any copy of the shared types, including one that
- * predates consent.
+ * native SDKs.
  */
 export type ConsentState = 'granted' | 'pending' | 'denied'
 
@@ -123,14 +121,17 @@ export interface FingerlyOptions extends MobileFingerlyOptions {
   consent?: ConsentState
   /**
    * Android only: your Google Cloud project number, the one linked to the app
-   * in Play Console, to add Play Integrity verdicts to events (server ADR
-   * 0026). It takes effect only when the app also depends on the optional
-   * `io.fingerly:fingerly-play-integrity` artifact; without it the number is
-   * ignored and nothing fails. Ignored on iOS. Omit it to leave Play
-   * Integrity off.
+   * in Play Console, to add Play Integrity Standard verdicts to `v: 3` events
+   * (server ADR 0026). It takes effect only when the app also depends on the
+   * optional `io.fingerly:fingerly-play-integrity` artifact; without it the
+   * number is ignored and nothing fails. Safely ignored on iOS. Omit it to
+   * leave Play Integrity off.
    */
   playIntegrityCloudProjectNumber?: number
 }
+
+/** Alias of [[FingerlyOptions]] for callers naming configuration options `FingerlyConfig`. */
+export type FingerlyConfig = FingerlyOptions
 
 export interface IdentifyOptions extends MobileIdentifyOptions {
   /**
@@ -138,8 +139,7 @@ export interface IdentifyOptions extends MobileIdentifyOptions {
    * user: on start, on a timer, on returning to the foreground. An automatic
    * call joins an identification already in flight instead of starting
    * another, and waits out a transient failure instead of repeating it at
-   * once. False when omitted. On Android it has no effect until the native
-   * Android SDK supports it.
+   * once. False when omitted.
    */
   automatic?: boolean
 }
@@ -165,8 +165,7 @@ export class FingerlyError extends Error {
      * How long the server asked the app to wait, in milliseconds, from its
      * `Retry-After`, when the native SDK gave up on a 429 or 503 that named
      * one. Wait at least this long before identifying again. Undefined when
-     * the response named no wait, and on Android until the native Android
-     * bridge passes the header on.
+     * the response named no wait.
      */
     readonly retryAfterMs?: number,
   ) {
@@ -293,9 +292,8 @@ function fingerlyError(error: unknown): FingerlyError {
 }
 
 /**
- * The wait a native transport failure carried. The iOS bridge puts it in the
- * NSError's `userInfo.retryAfterMs`, which React Native passes through as the
- * rejection's `userInfo`.
+ * The wait a native transport failure carried. Both iOS and Android bridges
+ * expose `Retry-After` as `userInfo.retryAfterMs` on the rejected promise.
  */
 function retryAfterOf(record: Record<string, unknown> | undefined): number | undefined {
   const userInfo = record?.userInfo
@@ -392,9 +390,24 @@ const NULLABLE_FIELDS = [
 
 function serverAnswer(parsed: Record<string, unknown>): NativeIdentifyResult {
   const answer = pick(parsed, SERVER_FIELDS)
+  answer.requestId = typeof answer.requestId === 'string' ? answer.requestId : ''
+  answer.visitorId = typeof answer.visitorId === 'string' ? answer.visitorId : ''
+  answer.state = typeof answer.state === 'string' ? answer.state : ''
+
   for (const field of NULLABLE_FIELDS) {
     if (answer[field] === undefined) answer[field] = null
   }
+
+  // Option B (`v: 3`): whenever `identifiable === false`, `visitorId` is `""`
+  // and `visitorIsNew` is `false`; whenever `visitorId === ""`, `visitorIsNew`
+  // is never `true`.
+  if (answer.identifiable === false) {
+    answer.visitorId = ''
+    answer.visitorIsNew = false
+  } else if (answer.visitorId === '' && answer.visitorIsNew === true) {
+    answer.visitorIsNew = false
+  }
+
   return answer as unknown as NativeIdentifyResult
 }
 
@@ -436,11 +449,11 @@ export class FingerlyClient {
   }
 
   /**
-   * Collect and submit.
+   * Collect and submit a single-pass `v: 3` identification.
    *
-   * Returns the server's answer, not a receipt for one. There is no second
-   * call to make: the address lookup and the scoring happen on the request, so
-   * `suspectScore` and `visitorId` are populated by the time this resolves.
+   * Returns the server's answer, not a receipt for one. Under Option B,
+   * `visitorId` is `""` and `visitorIsNew` is `false` whenever
+   * `identifiable === false`.
    *
    * `suspectScore` is `null` rather than `0` when nothing scored the
    * submission or the key hides the score from apps. The two are different
@@ -483,14 +496,9 @@ export class FingerlyClient {
 }
 
 /**
- * A configured client.
+ * Build and configure a client.
  *
- * Async, and it returns a promise even though the native `configure` is
- * synchronous. That is deliberate and matches every other Fingerly SDK: the shape
- * callers write today is the shape that still works when this needs to await
- * something, and changing `load` from sync to async later would break every
- * integration at once.
- *
+ * Async, returning a promise so the signature matches every other Fingerly SDK.
  * Loading collects and sends nothing, whatever the consent, so it is safe to
  * call at launch before the user has been asked. The consent passed here, or
  * `pending` when there is none, replaces whatever the native SDK held before.
@@ -505,14 +513,9 @@ export async function load(options: FingerlyOptions): Promise<FingerlyClient> {
   if (!native) throw new FingerlyError(MISSING_NATIVE_MODULE)
 
   try {
-    if (Platform.OS === 'android') {
-      // The Android module's `configure` takes the project number as a fifth
-      // argument, 0 meaning none; React Native refuses a call with the wrong
-      // number of arguments, so iOS keeps its four.
-      native.configure(options.apiKey, options.endpoint ?? '', platformName(), consent, playIntegrity ?? 0)
-    } else {
-      native.configure(options.apiKey, options.endpoint ?? '', platformName(), consent)
-    }
+    // 0 means no Play Integrity project number; the iOS module accepts the
+    // fifth argument and safely ignores it.
+    native.configure(options.apiKey, options.endpoint ?? '', platformName(), consent, playIntegrity ?? 0)
   } catch (error) {
     throw fingerlyError(error)
   }
@@ -521,17 +524,23 @@ export async function load(options: FingerlyOptions): Promise<FingerlyClient> {
 }
 
 /**
- * Delete the install record the native SDK keeps on the device.
+ * Atomically delete the stored device identity for a **user-initiated GDPR /
+ * privacy erasure request** (such as "Delete My Data" or account deletion).
  *
- * Call it when a user asks for their data to be erased or deletes their
- * account, so the device stops presenting the install ID the server knows it
- * by. Needs no [[load]] and no consent, and sends nothing. Resolves once no
- * record remains, including when there was none. The next identification made
- * with consent starts a new record; to stop identifying as well, set consent
- * to `'denied'` first, because a call already running may write a fresh record.
+ * **Strictly for GDPR / privacy erasure only:** never call this on routine
+ * logout, session rotation, or automated loops. It wipes the local `install_id`
+ * and hardware attestation key state (`Application Support/io.fingerly.sdk/`
+ * App Attest key state on iOS, and the install record plus persistent
+ * `AndroidKeyStore` v3 ECDSA attestation key on Android) so subsequent
+ * re-consented sessions mint an unlinked `visitorId`. Repeated resets on the
+ * same hardware key (`>= 3` distinct `install_id` values within 24 hours) are
+ * flagged as `install-id-churn` tampering by the server.
  *
- * Rejects with a [[FingerlyError]] when the delete fails, and when the native
- * SDK in the app predates this call.
+ * Needs no [[load]] and no consent, and sends nothing. Resolves once no stored
+ * identity remains, including when there was none; set consent to `'denied'`
+ * first if you also want to prevent in-flight or future identifications from
+ * creating a fresh record. Rejects with a [[FingerlyError]] when deletion fails
+ * or when the linked native SDK predates this call.
  */
 export async function deleteStoredIdentity(): Promise<void> {
   const native = nativeModule()
@@ -556,16 +565,24 @@ export function nativeVersion(): string | undefined {
   return nativeModule()?.sdkVersion
 }
 
-// Re-exported so an app that only installs @fingerly/react-native can name the
-// types it receives without also depending on the kernel directly. They are the
-// same types the browser SDK returns, from the same package — which is the
-// point of the report envelope being shared.
+// Re-exported from `@fingerly/types` (`v: 3` contract) so an app that only
+// installs `@fingerly/react-native` can name the result and risk signal
+// shapes directly.
 export type {
+  Confidence,
+  IdentifyResult,
+  IdentifySubmission,
+  IdentifyTrigger,
   IntegrityReport,
   Lie,
+  LieKind,
+  MobileFingerlyOptions,
+  MobileIdentifyOptions,
   NativeIdentifyResult,
+  RiskSignal,
   SdkPlatform,
   SignalOutcome,
   SignalReport,
   SignalStatus,
+  SuspectLevel,
 } from '@fingerly/types'

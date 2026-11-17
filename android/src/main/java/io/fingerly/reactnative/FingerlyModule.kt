@@ -5,8 +5,12 @@ import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
-import io.fingerly.sdk.bridge.FingerlyBridge
+import io.fingerly.sdk.AppChecksProvider
+import io.fingerly.sdk.PlayIntegrityProvider
+import io.fingerly.sdk.appchecks.FingerlyAppChecks
 import io.fingerly.sdk.bridge.BridgeCallback
+import io.fingerly.sdk.bridge.FingerlyBridge
+import io.fingerly.sdk.playintegrity.FingerlyPlayIntegrity
 
 /**
  * The React Native module.
@@ -20,13 +24,32 @@ import io.fingerly.sdk.bridge.BridgeCallback
  *
  * # Why the work is not on the main thread
  *
- * `identify` reads a megabyte of `/proc/self/maps`, walks the mount table and
- * makes a TLS handshake. React Native calls a module method on its own native
- * modules thread, and everything below hands off to the SDK's own coroutine
- * scope immediately — so a fingerprint never touches the thread that draws the
+ * `identify` reads `/proc/self/maps`, walks the mount table and makes a TLS
+ * handshake. React Native calls a module method on its own native modules
+ * thread, and everything below hands off to the SDK's own coroutine scope
+ * immediately — so a fingerprint never touches the thread that draws the
  * customer's UI.
  */
 class FingerlyModule(context: ReactApplicationContext) : ReactContextBaseJavaModule(context) {
+
+    private val optionalAppChecks: AppChecksProvider? by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        try {
+            FingerlyAppChecks()
+        } catch (_: LinkageError) {
+            null
+        }
+    }
+
+    private val optionalPlayIntegrity: PlayIntegrityProvider? by lazy(LazyThreadSafetyMode.PUBLICATION) {
+        try {
+            FingerlyPlayIntegrity()
+        } catch (_: LinkageError) {
+            null
+        }
+    }
+
+    /** Why the last `configure` was refused, or null when it was accepted. */
+    @Volatile private var configurationError: String? = null
 
     /**
      * The name JavaScript looks the module up by.
@@ -49,10 +72,11 @@ class FingerlyModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
 
     /**
      * `playIntegrityCloudProjectNumber` is the app's Google Cloud project
-     * number for Play Integrity, 0 for none: a JavaScript number, so a double
-     * here. It takes effect only when the app also depends on the optional
-     * `io.fingerly:fingerly-play-integrity` artifact, which the native SDK
-     * finds on its own; without it the number is ignored.
+     * number for Play Integrity, `<= 0` for none: a JavaScript number, so a
+     * `Double` here. Optional `io.fingerly:fingerly-app-checks` and
+     * `io.fingerly:fingerly-play-integrity` providers are wired directly
+     * (without `Class.forName` reflection) when the host app links them, while
+     * preserving any custom providers pre-registered on [FingerlyBridge].
      */
     @ReactMethod
     fun configure(
@@ -62,19 +86,35 @@ class FingerlyModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
         consent: String,
         playIntegrityCloudProjectNumber: Double,
     ) {
-        // The React context rather than the Activity. An SDK holding an
-        // Activity would keep a destroyed screen alive for as long as the
-        // client lives, and this one is deliberately long-lived.
-        //
-        // `consent` is always sent by `src/index.ts`, `pending` when the app
-        // passed none, so the state is set rather than left as it was.
+        val projectNumber = playIntegrityCloudProjectNumber.toLong().takeIf { it > 0L }
+
+        // A project number with no provider to use it would leave Play
+        // Integrity off without a word. `configure` returns nothing to
+        // JavaScript, so the configuration is refused, nothing is changed, and
+        // every later `identify` and `collect` rejects with
+        // `play_integrity_unavailable` until a complete configuration replaces it.
+        val playIntegrity = optionalPlayIntegrity
+        configurationError =
+            if (projectNumber != null && playIntegrity == null && !FingerlyBridge.hasPlayIntegrityProvider()) {
+                PLAY_INTEGRITY_UNAVAILABLE_MESSAGE
+            } else {
+                null
+            }
+        if (configurationError != null) return
+
+        optionalAppChecks?.let(FingerlyBridge::setAppChecks)
+        // A Play Integrity provider the app registered by hand is kept.
+        if (projectNumber != null && playIntegrity != null && !FingerlyBridge.hasPlayIntegrityProvider()) {
+            FingerlyBridge.setPlayIntegrity(playIntegrity, projectNumber)
+        }
+
         FingerlyBridge.configure(
             reactApplicationContext,
             apiKey,
             endpoint,
             platform,
             consent,
-            playIntegrityCloudProjectNumber.toLong(),
+            projectNumber,
         )
     }
 
@@ -85,34 +125,42 @@ class FingerlyModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
     }
 
     /**
-     * `automatic` is accepted for parity with iOS and not read: the native
-     * Android bridge has no such option yet, so every call is identified as
-     * a user's call.
+     * Forwards `tag`, `submit`, and `automatic` to the native Android `0.3.0`
+     * bridge.
      */
     @ReactMethod
-    @Suppress("UNUSED_PARAMETER")
     fun identify(tag: String?, submit: Boolean, automatic: Boolean, promise: Promise) {
-        FingerlyBridge.identify(tag, submit, settle(promise))
+        if (refuseUnconfigured(promise)) return
+        FingerlyBridge.identify(tag, submit, automatic, settle(promise))
     }
 
     @ReactMethod
     fun collect(promise: Promise) {
+        if (refuseUnconfigured(promise)) return
         FingerlyBridge.collect(settle(promise))
     }
 
+    /** Rejects the call with the stored configuration error, if there is one. */
+    private fun refuseUnconfigured(promise: Promise): Boolean {
+        val error = configurationError ?: return false
+        promise.reject(PLAY_INTEGRITY_UNAVAILABLE, error)
+        return true
+    }
+
     /**
-     * Deletes the install record, for a user's erasure or account deletion.
+     * Atomically deletes the local `install_id` install record and persistent
+     * `AndroidKeyStore` v3 attestation signing key.
      *
-     * Resolves with nothing once no record remains, and otherwise rejects with
-     * `delete_failed`, the code the iOS module uses for the same failure. A
-     * small file delete, done here on the native modules thread rather than
-     * handed off: it needs neither configuration nor consent.
+     * Strictly for user-initiated GDPR / privacy erasure requests ("Delete My
+     * Data" or account erasure), never for routine logout or session rotation.
+     * Resolves with nothing once neither record nor key remains, and otherwise
+     * rejects with `delete_failed`, matching the iOS module.
      */
     @ReactMethod
     fun deleteStoredIdentity(promise: Promise) {
         val deleted = try {
             FingerlyBridge.deleteStoredIdentity(reactApplicationContext)
-        } catch (error: Throwable) {
+        } catch (_: Throwable) {
             false
         }
         if (deleted) {
@@ -127,11 +175,9 @@ class FingerlyModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
      *
      * The rejection code is the HTTP status where there was one, as a string,
      * so a caller can branch on 401 (the key is wrong) or 402 (the organisation
-     * is not accepting traffic) without parsing a message. Both are the
-     * customer's configuration rather than the user's behaviour, and an app
-     * that retries either is an app that drains a battery over a typo. A call
-     * refused for want of consent arrives as `consent_required`, which
-     * `src/index.ts` turns into a `ConsentError`.
+     * is not accepting traffic) without parsing a message. A call refused for
+     * want of consent arrives as `consent_required`, which `src/index.ts` turns
+     * into a `ConsentError`.
      */
     private fun settle(promise: Promise): BridgeCallback = object : BridgeCallback {
         override fun onSuccess(json: String) {
@@ -148,11 +194,19 @@ class FingerlyModule(context: ReactApplicationContext) : ReactContextBaseJavaMod
                 return
             }
             // `userInfo.retryAfterMs` is where the JS side reads it, on both platforms.
-            promise.reject(code, message, Arguments.createMap().apply { putDouble("retryAfterMs", retryAfterMs.toDouble()) })
+            promise.reject(
+                code,
+                message,
+                Arguments.createMap().apply { putDouble("retryAfterMs", retryAfterMs.toDouble()) },
+            )
         }
     }
 
     private companion object {
         const val DELETE_FAILED = "delete_failed"
+        const val PLAY_INTEGRITY_UNAVAILABLE = "play_integrity_unavailable"
+        const val PLAY_INTEGRITY_UNAVAILABLE_MESSAGE =
+            "playIntegrityCloudProjectNumber was set but the io.fingerly:fingerly-play-integrity " +
+                "artifact is not on the classpath"
     }
 }

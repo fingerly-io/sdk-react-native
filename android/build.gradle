@@ -29,6 +29,7 @@ android {
         // the SDK itself supports, and lowering it would promise a platform the
         // code does not build for.
         minSdk 21
+        consumerProguardFiles 'consumer-rules.pro'
     }
 
     compileOptions {
@@ -39,6 +40,13 @@ android {
     kotlinOptions {
         jvmTarget = '17'
     }
+}
+
+repositories {
+    google()
+    mavenCentral()
+    mavenLocal()
+    maven { url 'https://maven.fingerly.io' }
 }
 
 rootProject.allprojects {
@@ -54,18 +62,24 @@ rootProject.allprojects {
 }
 
 dependencies {
-    // Provided by the host application. A bridge that bundled its own copy of
-    // React Native would give the app two.
-    implementation 'com.facebook.react:react-android'
+    // Provided by the host application. When compiled standalone for module
+    // verification (rootProject == project), compile against REACT_NATIVE_VERSION
+    // without bundling React Native into any AAR.
+    if (rootProject == project) {
+        def rnVersion = findProperty('REACT_NATIVE_VERSION') ?: '0.79.2'
+        compileOnly "com.facebook.react:react-android:${rnVersion}"
+    } else {
+        implementation 'com.facebook.react:react-android'
+    }
 
-    // The SDK that does the collecting.
-    //
-    // Resolved from Fingerly's own Maven repository, declared above; see the
-    // note in the package README. Contributors can instead publish the native
-    // SDK to Maven Local (`./gradlew :fingerly:publishToMavenLocal` in
-    // sdk-android), which the repositories above check first. A composite
-    // build (`includeBuild` with a dependency substitution) does not work with
-    // current React Native apps: they build with AGP 9 while the native SDK
-    // builds with AGP 8, and Gradle refuses two AGP versions in one build.
-    implementation 'io.fingerly:fingerly:0.2.0'
+    // Core Android SDK (`v: 3`). Ships zero `<queries>` entries and zero Google
+    // Play Services dependencies.
+    implementation 'io.fingerly:fingerly:0.3.0'
+
+    // Compile-only hooks for the opt-in artifacts (`io.fingerly:fingerly-app-checks`
+    // and `io.fingerly:fingerly-play-integrity`). `compileOnly` never merges
+    // `<queries>` or Play Services into the host APK unless the host app adds
+    // those artifacts itself.
+    compileOnly 'io.fingerly:fingerly-app-checks:0.3.0'
+    compileOnly 'io.fingerly:fingerly-play-integrity:0.3.0'
 }
