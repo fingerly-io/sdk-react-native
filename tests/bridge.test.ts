@@ -523,7 +523,6 @@ describe('v3 TypeScript contract re-exports', () => {
       'attestation_failed',
       'attestation_missing',
       'attestation_downgrade',
-      'app_attest_key_churn',
       'play_device_integrity_failed',
       'play_app_unrecognized',
       'device_inconsistent',
