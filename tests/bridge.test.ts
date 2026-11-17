@@ -889,7 +889,7 @@ describe('version, native coordinates, and bridge selector parity (0.3.0)', () =
     expect(binary).toEqual({
       version: '0.3.0',
       url: 'https://maven.fingerly.io/ios/Fingerly-0.3.0.xcframework.zip',
-      sha256: 'c1d582eae15243fb63e3e55e68909490060f2b8232624b1025bb931c3100b4cc',
+      sha256: 'b3288cc4539b6c5b8bae226854a586473b2457489e69b2ac1f26e9f84f6add27',
       team_id: 'XGXX88HRR5',
     })
     expect(fetchScript).toContain('FINGERLY_XCFRAMEWORK_PATH')
