@@ -40,7 +40,7 @@
    ```ts
    import { ConsentState, load } from '@fingerly/react-native'
 
-   // consent: only once you have consent (or another lawful basis)
+   // consent: only once you have consent (or know none is required)
    const fingerly = await load({ apiKey: 'fly_pk_production_…', consent: ConsentState.Granted })
    const { requestId, visitorId, suspectScore, suspectLevel } = await fingerly.identify({ tag: 'checkout' })
 
@@ -134,7 +134,7 @@ fingerly.consent   // ConsentState.Granted, ConsentState.Pending or ConsentState
 | `setConsent(state)` | Records the decision. Synchronous and safe to call repeatedly. |
 | `consent` | The state last given to the native SDK, read-only. |
 
-The default is `'pending'`, so an integration that never mentions consent identifies nobody. Pass `consent: ConsentState.Granted` to `load` only when you already have consent, or another lawful basis. Anything other than the three states throws a `TypeError` rather than being guessed at.
+The default is `'pending'`, so an integration that never mentions consent identifies nobody. Pass `consent: ConsentState.Granted` to `load` only once collection is permitted for this user: they consented, or the applicable law does not require consent. A GDPR lawful basis such as legitimate interest is not enough on its own. Anything other than the three states throws a `TypeError` rather than being guessed at.
 
 While the state is anything but `granted`, the native SDK runs no source, reads and writes no container storage or attestation key state, and sends nothing. `identify()` and `collect()` reject with a `ConsentError`, whose `code` is `'consent_required'` and whose `state` says which state refused the call:
 

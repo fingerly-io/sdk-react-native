@@ -24,7 +24,7 @@
  * import { ConsentState, load } from '@fingerly/react-native'
  *
  * const fingerly = await load({ apiKey: 'fly_pk_production_…' })
- * // From the consent tool, once the user has agreed (or another lawful basis applies).
+ * // From the consent tool, once the user has agreed (or you know none is required).
  * fingerly.setConsent(ConsentState.Granted)
  * const { requestId } = await fingerly.identify({ tag: 'checkout' })
  *
@@ -107,8 +107,10 @@ export interface FingerlyOptions extends MobileFingerlyOptions {
    * Leave it `pending` and call [[FingerlyClient.setConsent]] once the app's
    * consent tool has an answer. Until consent is `granted`, `identify()` and
    * `collect()` reject with a [[ConsentError]] and the native SDK runs no
-   * source and sends nothing. Pass `granted` only once the user has agreed, or
-   * where another lawful basis applies.
+   * source and sends nothing. Pass `granted` only once collection is permitted
+   * for this user: they consented, or the law that applies to them does not
+   * require consent. A GDPR lawful basis such as legitimate interest is not
+   * enough on its own.
    */
   consent?: ConsentState
   /**
