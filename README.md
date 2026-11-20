@@ -21,7 +21,7 @@
 
 ## What is this
 
-`@fingerly/react-native` (`0.4.0`, `v: 3`) is the React Native bridge to the Fingerly native iOS and Android SDKs, which do the collecting. You call `identify()` from JavaScript and get back a request ID and a visitor ID to send to your own backend, which decides what to do. [Fingerly](https://fingerly.io) is a device intelligence API that helps you protect signups, logins and payments from fraud and abuse.
+`@fingerly/react-native` (`0.4.1`, `v: 3`) is the React Native bridge to the Fingerly native iOS and Android SDKs, which do the collecting. You call `identify()` from JavaScript and get back a request ID and a visitor ID to send to your own backend, which decides what to do. [Fingerly](https://fingerly.io) is a device intelligence API that helps you protect signups, logins and payments from fraud and abuse.
 
 ## Getting started
 
@@ -29,11 +29,11 @@
 2. **Install the package.** Autolinking handles the rest.
 
    ```sh
-   pnpm add @fingerly/react-native@^0.4.0
+   pnpm add @fingerly/react-native@^0.4.1
    cd ios && pod install
    ```
 
-   Rebuild the native app afterwards. `npm install @fingerly/react-native@^0.4.0` and `yarn add @fingerly/react-native@^0.4.0` work as well.
+   Rebuild the native app afterwards. `npm install @fingerly/react-native@^0.4.1` and `yarn add @fingerly/react-native@^0.4.1` work as well.
 
 3. **Identify.**
 
@@ -212,12 +212,12 @@ Five statuses, never a hole: `ok`, `unsupported`, `blocked`, `timeout`, `error`.
 
 ## Platform setup
 
-The bridge forwards to the native `0.4.0` SDKs and adds no scoring logic of its own. `ios/FingerlyModule.swift` calls the [iOS SDK (`0.4.0`)](https://github.com/fingerly-io/sdk-ios) (15 native sources, `FingerlyPtrAuth` integrity and App Attest), and `android/…/FingerlyModule.kt` calls the Android SDK (`io.fingerly:fingerly:0.4.0`, 20 native sources and persistent 24h TEE Keystore signing); each forwards to that SDK's `FingerlyBridge`.
+The bridge forwards to the native SDKs (iOS `0.4.1`, Android `0.4.0`) and adds no scoring logic of its own. `ios/FingerlyModule.swift` calls the [iOS SDK (`0.4.1`)](https://github.com/fingerly-io/sdk-ios) (15 native sources, `FingerlyPtrAuth` integrity and App Attest), and `android/…/FingerlyModule.kt` calls the Android SDK (`io.fingerly:fingerly:0.4.0`, 20 native sources and persistent 24h TEE Keystore signing); each forwards to that SDK's `FingerlyBridge`.
 
 <details>
 <summary><b>iOS</b></summary>
 
-`pod install` downloads the matching `Fingerly.xcframework` (`0.4.0`) from `https://maven.fingerly.io/ios/` and verifies its SHA-256 checksum, so the Podfile needs no separate entry for the native SDK. The same binary is published as a Swift package at [sdk-ios](https://github.com/fingerly-io/sdk-ios).
+`pod install` downloads the matching `Fingerly.xcframework` (`0.4.1`) from `https://maven.fingerly.io/ios/` and verifies its SHA-256 checksum, so the Podfile needs no separate entry for the native SDK. The same binary is published as a Swift package at [sdk-ios](https://github.com/fingerly-io/sdk-ios).
 
 The Play Integrity project number passed to `load` is ignored on iOS.
 
