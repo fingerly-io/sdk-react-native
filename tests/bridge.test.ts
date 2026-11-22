@@ -564,6 +564,7 @@ describe('v3 TypeScript contract re-exports', () => {
 /** Every signal group and raw detector the server reports (`server/domain/risk`). */
 const SERVER_SIGNALS = [
   'active_call',
+  'ai_spoofed',
   'android_emulator',
   'antidetect_browser',
   'anycast_ip',
@@ -574,6 +575,7 @@ const SERVER_SIGNALS = [
   'automation',
   'bad_bot',
   'bogon_ip',
+  'bootloader_unlocked',
   'bot',
   'browser_tampering',
   'cloned_app',
@@ -593,6 +595,7 @@ const SERVER_SIGNALS = [
   'frida_detected',
   'geo_mismatch',
   'high_activity',
+  'identity_obfuscated',
   'incognito',
   'incognito_mode',
   'ios_simulator',
@@ -633,7 +636,6 @@ const SERVER_SIGNALS = [
   'vpn_os_mismatch',
   'vpn_public',
   'vpn_relay',
-  'vpn_timezone',
   'web_ticket_invalid',
   'web_ticket_missing',
 ]
@@ -660,7 +662,7 @@ describe('named constants', () => {
 
   it('pin every value to the server lists', () => {
     expect([...Object.values(Signal)].sort()).toEqual(SERVER_SIGNALS)
-    expect(Object.values(Signal)).toHaveLength(73)
+    expect(Object.values(Signal)).toHaveLength(75)
     expect(Object.values(Signal)).not.toContain('app_attest_key_churn')
     expect(Object.values(SuspectLevel)).toEqual(['low', 'medium', 'high'])
     expect(Object.values(Confidence)).toEqual(['low', 'medium', 'high'])
@@ -1051,8 +1053,8 @@ describe('deleteStoredIdentity (GDPR / privacy erasure)', () => {
   })
 })
 
-describe('version, native coordinates, and bridge selector parity (0.4.1)', () => {
-  it('aligns package.json, podspec, fingerly-binary.json, and android/build.gradle at 0.4.1', () => {
+describe('version, native coordinates, and bridge selector parity (0.4.2)', () => {
+  it('aligns package.json, podspec, fingerly-binary.json, and android/build.gradle at 0.4.2', () => {
     const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
     // The @fingerly/types this package resolves: packages/types in this
     // repository, client/web/types when it builds inside the sdks workspace.
@@ -1065,11 +1067,11 @@ describe('version, native coordinates, and bridge selector parity (0.4.1)', () =
     const manifest = readFileSync(new URL('../android/src/main/AndroidManifest.xml', import.meta.url), 'utf8')
     const fetchScript = readFileSync(new URL('../ios/fetch-fingerly-xcframework.sh', import.meta.url), 'utf8')
 
-    expect(pkg.version).toBe('0.4.1')
-    // The contract types may move ahead of the bridge; it needs the named constants from 0.4.0 on.
+    expect(pkg.version).toBe('0.4.2')
+    // The contract types may move ahead of the bridge; it needs the signal names of 0.6.0 on.
     const [typesMajor, typesMinor] = typesPkg.version.split('.').map(Number)
-    expect(typesMajor === 0 && (typesMinor ?? 0) >= 4).toBe(true)
-    expect(podspec).toMatch(/s\.version\s*=\s*'0\.4\.1'/)
+    expect(typesMajor === 0 && (typesMinor ?? 0) >= 6).toBe(true)
+    expect(podspec).toMatch(/s\.version\s*=\s*'0\.4\.2'/)
     expect(binary).toEqual({
       version: '0.4.1',
       url: 'https://maven.fingerly.io/ios/Fingerly-0.4.1.xcframework.zip',
