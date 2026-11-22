@@ -575,6 +575,7 @@ const SERVER_SIGNALS = [
   'automation',
   'bad_bot',
   'bogon_ip',
+  'bootloader_unlocked',
   'bot',
   'browser_tampering',
   'cloned_app',
@@ -661,7 +662,7 @@ describe('named constants', () => {
 
   it('pin every value to the server lists', () => {
     expect([...Object.values(Signal)].sort()).toEqual(SERVER_SIGNALS)
-    expect(Object.values(Signal)).toHaveLength(74)
+    expect(Object.values(Signal)).toHaveLength(75)
     expect(Object.values(Signal)).not.toContain('app_attest_key_churn')
     expect(Object.values(SuspectLevel)).toEqual(['low', 'medium', 'high'])
     expect(Object.values(Confidence)).toEqual(['low', 'medium', 'high'])
