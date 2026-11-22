@@ -21,7 +21,7 @@
 
 ## What is this
 
-`@fingerly/react-native` (`0.4.1`, `v: 3`) is the React Native bridge to the Fingerly native iOS and Android SDKs, which do the collecting. You call `identify()` from JavaScript and get back a request ID and a visitor ID to send to your own backend, which decides what to do. [Fingerly](https://fingerly.io) is a device intelligence API that helps you protect signups, logins and payments from fraud and abuse.
+`@fingerly/react-native` (`0.4.2`, `v: 3`) is the React Native bridge to the Fingerly native iOS and Android SDKs, which do the collecting. You call `identify()` from JavaScript and get back a request ID and a visitor ID to send to your own backend, which decides what to do. [Fingerly](https://fingerly.io) is a device intelligence API that helps you protect signups, logins and payments from fraud and abuse.
 
 ## Getting started
 
@@ -29,11 +29,11 @@
 2. **Install the package.** Autolinking handles the rest.
 
    ```sh
-   pnpm add @fingerly/react-native@^0.4.1
+   pnpm add @fingerly/react-native@^0.4.2
    cd ios && pod install
    ```
 
-   Rebuild the native app afterwards. `npm install @fingerly/react-native@^0.4.1` and `yarn add @fingerly/react-native@^0.4.1` work as well.
+   Rebuild the native app afterwards. `npm install @fingerly/react-native@^0.4.2` and `yarn add @fingerly/react-native@^0.4.2` work as well.
 
 3. **Identify.**
 
