@@ -1051,6 +1051,17 @@ describe('deleteStoredIdentity (GDPR / privacy erasure)', () => {
     expect(source).toContain('install_id')
     expect(source).toMatch(/attestation key state/i)
   })
+
+  it('says an Android erasure also needs "Erase a visitor", since Android 0.5.0 links reinstalls', () => {
+    const source = readFileSync(new URL('../src/index.ts', import.meta.url), 'utf8')
+    const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8')
+    for (const text of [source, readme]) {
+      expect(text).toContain('Erase a visitor')
+      expect(text).toContain('ANDROID_ID')
+    }
+    expect(readme).toContain('a reinstall keeps its `visitorId` until a factory reset')
+    expect(readme).not.toMatch(/so later re-consented sessions mint an unlinked/)
+  })
 })
 
 describe('version, native coordinates, and bridge selector parity (0.4.2)', () => {
@@ -1081,7 +1092,9 @@ describe('version, native coordinates, and bridge selector parity (0.4.2)', () =
     expect(fetchScript).toContain('FINGERLY_XCFRAMEWORK_PATH')
     expect(fetchScript).toContain('anchor apple generic and certificate leaf[subject.OU]')
     expect(gradle).toContain('mavenLocal()')
-    expect(gradle).toContain("implementation 'io.fingerly:fingerly:0.4.0'")
+    expect(gradle).toContain("implementation 'io.fingerly:fingerly:0.5.0'")
+    expect(gradle).toContain("compileOnly 'io.fingerly:fingerly-app-checks:0.5.0'")
+    expect(gradle).toContain("compileOnly 'io.fingerly:fingerly-play-integrity:0.5.0'")
     expect(gradle).not.toMatch(/^\s*(implementation|api)\s+['"]io\.fingerly:fingerly-(app-checks|play-integrity)/m)
     expect(manifest.replace(/<!--[\s\S]*?-->/g, '')).not.toContain('<queries')
   })

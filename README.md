@@ -164,10 +164,10 @@ await deleteStoredIdentity()
 
 Strictly for **user-initiated GDPR or privacy erasure** ("Delete My Data" or account deletion), never for routine logout, session expiry or account switching: repeated `install_id` resets on the same hardware key within 24 hours trigger churn telemetry.
 
-It atomically deletes the local `install_id` and the hardware attestation key state, so later re-consented sessions mint an unlinked `visitorId`:
+It atomically deletes the local `install_id` and the hardware attestation key state:
 
-- On iOS, `Application Support/io.fingerly.sdk/`, kept with `isExcludedFromBackup = true` and with zero Keychain usage.
-- On Android, the local install record plus the persistent `AndroidKeyStore` v3 EC P-256 signing key `io.fingerly.sdk.attest.v3`.
+- On iOS, `Application Support/io.fingerly.sdk/`, kept with `isExcludedFromBackup = true` and with zero Keychain usage. Later re-consented sessions get an unlinked `visitorId`.
+- On Android, the local install record plus the persistent `AndroidKeyStore` v3 EC P-256 signing key `io.fingerly.sdk.attest.v3`. Have your backend also call the management API's "Erase a visitor" (`DELETE /api/v1/management/organizations/{organization_id}/visitors/{visitor_id}`): until then, on a phone that passes hardware attestation, the `ANDROID_ID` digest can still lead the next report back to the old `visitorId` (see [Reinstalls on Android](#platform-setup)).
 
 It needs no `load` and no consent, sends nothing, and resolves once no record remains, including when there was none. It rejects with a `FingerlyError` when the delete fails. To stop identifying as well, set consent to `'denied'` first.
 
@@ -212,7 +212,7 @@ Five statuses, never a hole: `ok`, `unsupported`, `blocked`, `timeout`, `error`.
 
 ## Platform setup
 
-The bridge forwards to the native SDKs (iOS `0.4.1`, Android `0.4.0`) and adds no scoring logic of its own. `ios/FingerlyModule.swift` calls the [iOS SDK (`0.4.1`)](https://github.com/fingerly-io/sdk-ios) (15 native sources, `FingerlyPtrAuth` integrity and App Attest), and `android/…/FingerlyModule.kt` calls the Android SDK (`io.fingerly:fingerly:0.4.0`, 20 native sources and persistent 24h TEE Keystore signing); each forwards to that SDK's `FingerlyBridge`.
+The bridge forwards to the native SDKs (iOS `0.4.1`, Android `0.5.0`) and adds no scoring logic of its own. `ios/FingerlyModule.swift` calls the [iOS SDK (`0.4.1`)](https://github.com/fingerly-io/sdk-ios) (15 native sources, `FingerlyPtrAuth` integrity and App Attest), and `android/…/FingerlyModule.kt` calls the Android SDK (`io.fingerly:fingerly:0.5.0`, 20 native sources and persistent 24h TEE Keystore signing); each forwards to that SDK's `FingerlyBridge`.
 
 <details>
 <summary><b>iOS</b></summary>
@@ -226,25 +226,27 @@ The Play Integrity project number passed to `load` is ignored on iOS.
 <details>
 <summary><b>Android</b></summary>
 
-The Android module depends on `io.fingerly:fingerly:0.4.0` from Fingerly's Maven repository, `https://maven.fingerly.io`, which the bridge adds to the Gradle build itself, so the host app needs no repository override. The bridge checks `mavenLocal()` first, for local staging.
+The Android module depends on `io.fingerly:fingerly:0.5.0` from Fingerly's Maven repository, `https://maven.fingerly.io`, which the bridge adds to the Gradle build itself, so the host app needs no repository override. The bridge checks `mavenLocal()` first, for local staging.
 
-**Installed-app checks are opt-in (`io.fingerly:fingerly-app-checks:0.4.0`).** Core `io.fingerly:fingerly:0.4.0` carries zero `<queries>` entries in its manifest, because Google Play treats installed-app visibility as personal and sensitive data. If your app can justify package visibility for the 17 root managers, hooking frameworks and dual-space cloners in its Play review, add the sibling artifact at `0.4.0` to your app's Android module and declare "App activity: Installed apps" in the Data safety form:
+**Reinstalls on Android.** The Android SDK reads `ANDROID_ID` and sends it only as a SHA-256 digest keyed by your app's signing certificate (`identity.ssaid_digest`), never the value itself; it needs no permission and shows no prompt. The server uses it only for a report that hardware attestation verified on a device with a locked bootloader and a verified boot, so on such a phone a reinstall keeps its `visitorId` until a factory reset or a change of your app's signing key. Any other report is identified by its install ID alone, as on iOS, where a reinstall always starts with a new install ID. Answer "Device or other IDs" in your app's Play Data safety form accordingly.
+
+**Installed-app checks are opt-in (`io.fingerly:fingerly-app-checks:0.5.0`).** Core `io.fingerly:fingerly:0.5.0` carries zero `<queries>` entries in its manifest, because Google Play treats installed-app visibility as personal and sensitive data. If your app can justify package visibility for the 17 root managers, hooking frameworks and dual-space cloners in its Play review, add the sibling artifact at `0.5.0` to your app's Android module and declare "App activity: Installed apps" in the Data safety form:
 
 ```groovy
 // android/app/build.gradle
 dependencies {
-    implementation 'io.fingerly:fingerly-app-checks:0.4.0'
+    implementation 'io.fingerly:fingerly-app-checks:0.5.0'
 }
 ```
 
 `FingerlyModule` wires `FingerlyAppChecks()` automatically when the artifact is on the classpath, without `Class.forName` reflection. Without it, no `<queries>` entries are merged and nothing about other installed apps leaves the device, while sandbox and process-map cloner detection still runs.
 
-**Play Integrity (optional, `io.fingerly:fingerly-play-integrity:0.4.0`).** To add Google Play Integrity Standard tokens bound to the `v: 3` `statementDigest`, add the artifact to your app's Android module and pass your Google Cloud project number, the one linked to the app in Play Console, to `load`:
+**Play Integrity (optional, `io.fingerly:fingerly-play-integrity:0.5.0`).** To add Google Play Integrity Standard tokens bound to the `v: 3` `statementDigest`, add the artifact to your app's Android module and pass your Google Cloud project number, the one linked to the app in Play Console, to `load`:
 
 ```groovy
 // android/app/build.gradle
 dependencies {
-    implementation 'io.fingerly:fingerly-play-integrity:0.4.0'
+    implementation 'io.fingerly:fingerly-play-integrity:0.5.0'
 }
 ```
 
