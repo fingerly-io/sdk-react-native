@@ -525,8 +525,11 @@ export async function load(options: FingerlyOptions): Promise<FingerlyClient> {
  * logout, session rotation, or automated loops. It wipes the local `install_id`
  * and hardware attestation key state (`Application Support/io.fingerly.sdk/`
  * App Attest key state on iOS, and the install record plus persistent
- * `AndroidKeyStore` v3 ECDSA attestation key on Android) so subsequent
- * re-consented sessions mint an unlinked `visitorId`. Repeated resets on the
+ * `AndroidKeyStore` v3 ECDSA attestation key on Android). On iOS, subsequent
+ * re-consented sessions mint an unlinked `visitorId`. On Android, also have
+ * your backend call the management API's "Erase a visitor": until then, on a
+ * phone that passes hardware attestation, the `ANDROID_ID` digest can still
+ * lead the next report back to the old `visitorId`. Repeated resets on the
  * same hardware key (`>= 3` distinct `install_id` values within 24 hours) are
  * flagged as `install-id-churn` tampering by the server.
  *

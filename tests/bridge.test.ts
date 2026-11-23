@@ -1,5 +1,5 @@
 /**
- * Contract and unit suite for `@fingerly/react-native` (`0.4.0`, `v: 3`).
+ * Contract and unit suite for `@fingerly/react-native` (`0.5.0`, `v: 3`).
  */
 
 import { readFileSync } from 'node:fs'
@@ -1051,10 +1051,21 @@ describe('deleteStoredIdentity (GDPR / privacy erasure)', () => {
     expect(source).toContain('install_id')
     expect(source).toMatch(/attestation key state/i)
   })
+
+  it('says an Android erasure also needs "Erase a visitor", since Android 0.5.0 links reinstalls', () => {
+    const source = readFileSync(new URL('../src/index.ts', import.meta.url), 'utf8')
+    const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf8')
+    for (const text of [source, readme]) {
+      expect(text).toContain('Erase a visitor')
+      expect(text).toContain('ANDROID_ID')
+    }
+    expect(readme).toContain('a reinstall keeps its `visitorId` until a factory reset')
+    expect(readme).not.toMatch(/so later re-consented sessions mint an unlinked/)
+  })
 })
 
-describe('version, native coordinates, and bridge selector parity (0.4.2)', () => {
-  it('aligns package.json, podspec, fingerly-binary.json, and android/build.gradle at 0.4.2', () => {
+describe('version, native coordinates, and bridge selector parity (0.5.0)', () => {
+  it('aligns package.json, podspec, fingerly-binary.json, and android/build.gradle at 0.5.0', () => {
     const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
     // The @fingerly/types this package resolves: packages/types in this
     // repository, client/web/types when it builds inside the sdks workspace.
@@ -1067,11 +1078,11 @@ describe('version, native coordinates, and bridge selector parity (0.4.2)', () =
     const manifest = readFileSync(new URL('../android/src/main/AndroidManifest.xml', import.meta.url), 'utf8')
     const fetchScript = readFileSync(new URL('../ios/fetch-fingerly-xcframework.sh', import.meta.url), 'utf8')
 
-    expect(pkg.version).toBe('0.4.2')
+    expect(pkg.version).toBe('0.5.0')
     // The contract types may move ahead of the bridge; it needs the signal names of 0.6.0 on.
     const [typesMajor, typesMinor] = typesPkg.version.split('.').map(Number)
     expect(typesMajor === 0 && (typesMinor ?? 0) >= 6).toBe(true)
-    expect(podspec).toMatch(/s\.version\s*=\s*'0\.4\.2'/)
+    expect(podspec).toMatch(/s\.version\s*=\s*'0\.5\.0'/)
     expect(binary).toEqual({
       version: '0.4.1',
       url: 'https://maven.fingerly.io/ios/Fingerly-0.4.1.xcframework.zip',
@@ -1081,7 +1092,9 @@ describe('version, native coordinates, and bridge selector parity (0.4.2)', () =
     expect(fetchScript).toContain('FINGERLY_XCFRAMEWORK_PATH')
     expect(fetchScript).toContain('anchor apple generic and certificate leaf[subject.OU]')
     expect(gradle).toContain('mavenLocal()')
-    expect(gradle).toContain("implementation 'io.fingerly:fingerly:0.4.0'")
+    expect(gradle).toContain("implementation 'io.fingerly:fingerly:0.5.0'")
+    expect(gradle).toContain("compileOnly 'io.fingerly:fingerly-app-checks:0.5.0'")
+    expect(gradle).toContain("compileOnly 'io.fingerly:fingerly-play-integrity:0.5.0'")
     expect(gradle).not.toMatch(/^\s*(implementation|api)\s+['"]io\.fingerly:fingerly-(app-checks|play-integrity)/m)
     expect(manifest.replace(/<!--[\s\S]*?-->/g, '')).not.toContain('<queries')
   })

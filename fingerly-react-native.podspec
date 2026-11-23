@@ -31,7 +31,7 @@ end
 
 Pod::Spec.new do |s|
   s.name         = 'fingerly-react-native'
-  s.version      = '0.4.2'
+  s.version      = '0.5.0'
   raise "fingerly-react-native.podspec (#{s.version}) and package.json (#{package['version']}) disagree" unless s.version.to_s == package['version']
   s.summary      = package['description']
   s.license      = 'Apache-2.0'
